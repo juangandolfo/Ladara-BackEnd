@@ -1,0 +1,36 @@
+{
+  "name": "ladara-backend",
+  "version": "1.0.0",
+  "description": "- Use `nombre-archivo` for files -",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "npx ts-node src/server.ts",
+    "dev": "nodemon --exec ts-node --require dotenv/config src/server.ts",
+    "migration:run": "ts-node --require dotenv/config node_modules/typeorm/cli.js migration:run -d src/data-source.ts",
+    "migration:revert": "ts-node --require dotenv/config node_modules/typeorm/cli.js migration:revert -d src/data-source.ts",
+    "migration:generate": "ts-node --require dotenv/config node_modules/typeorm/cli.js migration:generate -d src/data-source.ts db/migrations/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/juangandolfo/Ladara-BackEnd.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/juangandolfo/Ladara-BackEnd/issues"
+  },
+  "homepage": "https://github.com/juangandolfo/Ladara-BackEnd#readme",
+  "dependencies": {
+    "dotenv": "^17.2.1",
+    "mysql2": "^3.14.3",
+    "typeorm": "^0.3.25"
+  },
+  "devDependencies": {
+    "@types/node": "^24.2.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}
