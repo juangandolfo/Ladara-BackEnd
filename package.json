@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc",
     "start": "npx ts-node src/server.ts",
-    "dev": "nodemon --exec ts-node --require dotenv/config src/server.ts",
+    "dev": "npm run build && nodemon --watch src --exec ts-node --require dotenv/config src/server.ts",
     "migration:run": "ts-node --require dotenv/config node_modules/typeorm/cli.js migration:run -d src/data-source.ts",
     "migration:revert": "ts-node --require dotenv/config node_modules/typeorm/cli.js migration:revert -d src/data-source.ts",
     "migration:generate": "ts-node --require dotenv/config node_modules/typeorm/cli.js migration:generate -d src/data-source.ts db/migrations/"
@@ -31,12 +31,17 @@
     "express": "^5.1.0",
     "express-validator": "^7.2.1",
     "mysql2": "^3.14.3",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
     "typeorm": "^0.3.25"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/node": "^24.2.1",
+    "@types/passport": "^1.0.17",
+    "@types/passport-google-oauth20": "^2.0.16",
+    "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
   }
