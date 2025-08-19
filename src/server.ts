@@ -1,11 +1,11 @@
 import express from 'express';
 import 'reflect-metadata';
-import { AppDataSource } from './data-source';
+import {AppDataSource} from './data-source';
 import productRoutes from './product/product.routes';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import AuthRoutes from './auth/auth.routes';
-import { User } from './user/user.entity';
+import {User} from './user/user.entity';
 import passport from 'passport';
 import dotenv from 'dotenv';
 
@@ -27,8 +27,10 @@ const PORT = process.env.PORT || 3000;
         app.use(bodyParser.json());
         app.disable('x-powered-by');
         app.use(express.json());
-        app.use(express.urlencoded({ extended: true }));
+        app.use(express.urlencoded({extended: true}));
         app.use(passport.initialize());
+
+        // CORS middleware
         app.use((req, res, next) => {
             res.header('Access-Control-Allow-Origin', '*');
             res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -39,6 +41,8 @@ const PORT = process.env.PORT || 3000;
                 next();
             }
         });
+
+        // Logging middleware
         app.use((req, res, next) => {
             console.log("Incoming request:", req.method, req.url);
             next();
@@ -56,20 +60,6 @@ const PORT = process.env.PORT || 3000;
             });
         });
 
-        app.get('/', (req, res) => {
-            res.status(200).json({
-                success: true,
-                message: 'Ladara Backend API',
-                version: '1.0.0',
-                endpoints: {
-                    products: '/api/products',
-                    productQuery: '/api/products/query',
-                    productFilter: '/api/products/filter',
-                    health: '/health'
-                }
-            });
-        });
-
         // 404 handler
         app.use((req, res) => {
             res.status(404).json({
@@ -79,21 +69,21 @@ const PORT = process.env.PORT || 3000;
             });
         });
 
-        // Error handler
+        // Error handler, this should be the last middleware
         app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
             console.error('Error:', error);
             res.status(error.status || 500).json({
                 success: false,
                 message: error.message || 'Internal server error',
-                ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
+                ...(process.env.NODE_ENV === 'development' && {stack: error.stack})
             });
         });
 
         app.listen(PORT, () => {
-            console.log(`🚀 Server is running on port ${PORT}`);
+            console.log(`Server is running on port ${PORT}`);
         });
     } catch (error) {
-        console.error('❌ Error during initialization:', error);
+        console.error('Error during initialization:', error);
         process.exit(1);
     }
 })();

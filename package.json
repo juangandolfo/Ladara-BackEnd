@@ -9,7 +9,7 @@
     "dev": "npm run build && nodemon --watch src --exec ts-node --require dotenv/config src/server.ts",
     "migration:run": "ts-node --require dotenv/config node_modules/typeorm/cli.js migration:run -d src/data-source.ts",
     "migration:revert": "ts-node --require dotenv/config node_modules/typeorm/cli.js migration:revert -d src/data-source.ts",
-    "migration:generate": "ts-node --require dotenv/config node_modules/typeorm/cli.js migration:generate -d src/data-source.ts db/migrations/"
+    "migration:generate": "ts-node --require dotenv/config node_modules/typeorm/cli.js migration:generate -d src/data-source.ts db/migrations/migrations"
   },
   "repository": {
     "type": "git",
