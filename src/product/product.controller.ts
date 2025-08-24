@@ -15,7 +15,7 @@ export class ProductController {
     filterProductsQuery = async (req: Request, res: Response): Promise<void> => {
         try {
             const filters = req.validatedQuery as ProductFilterDto;
-            
+
             // Additional validation for price ranges
             if (filters.minPrice !== undefined && filters.maxPrice !== undefined && filters.minPrice > filters.maxPrice) {
                 res.status(400).json({
@@ -34,8 +34,8 @@ export class ProductController {
                 return;
             }
 
-            const result = await this.productService.filterProducts(filters);
-            
+            const result = await this.productService.filterProducts(filters, '112105191225396162872');//TODO
+
             res.status(200).json({
                 success: true,
                 message: 'Products filtered successfully',
@@ -61,7 +61,7 @@ export class ProductController {
     filterProductsBody = async (req: Request, res: Response): Promise<void> => {
         try {
             const filters = req.body as ProductFilterDto;
-            
+
             // Additional validation for price ranges
             if (filters.minPrice !== undefined && filters.maxPrice !== undefined && filters.minPrice > filters.maxPrice) {
                 res.status(400).json({
@@ -80,8 +80,8 @@ export class ProductController {
                 return;
             }
 
-            const result = await this.productService.filterProducts(filters);
-            
+            const result = await this.productService.filterProducts(filters, '112105191225396162872');
+
             res.status(200).json({
                 success: true,
                 message: 'Products filtered successfully',
@@ -167,6 +167,28 @@ export class ProductController {
             res.status(500).json({
                 success: false,
                 message: 'Error retrieving product',
+                error: error instanceof Error ? error.message : 'Unknown error'
+            });
+        }
+    };
+
+    /**
+     * GET /products/deleted - Get all soft-deleted products
+     */
+    getDeletedProducts = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const products = await this.productService.getDeletedProducts();
+
+            res.status(200).json({
+                success: true,
+                message: 'Deleted products retrieved successfully',
+                data: products,
+                count: products.length
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: 'Error retrieving deleted products',
                 error: error instanceof Error ? error.message : 'Unknown error'
             });
         }
@@ -387,26 +409,4 @@ export class ProductController {
             });
         }
     };
-
-    /**
-     * GET /products/deleted - Get all soft-deleted products
-     */
-    getDeletedProducts = async (req: Request, res: Response): Promise<void> => {
-        try {
-            const products = await this.productService.getDeletedProducts();
-            
-            res.status(200).json({
-                success: true,
-                message: 'Deleted products retrieved successfully',
-                data: products,
-                count: products.length
-            });
-        } catch (error) {
-            res.status(500).json({
-                success: false,
-                message: 'Error retrieving deleted products',
-                error: error instanceof Error ? error.message : 'Unknown error'
-            });
-        }
-    };
-}
+ }

@@ -1,31 +1,29 @@
 {
-      "compilerOptions": {
-        "module": "nodenext",
-        "target": "esnext",
-        "types": [
-          "node"
+        "compilerOptions": {
+          "outDir": "./dist",
+          "rootDir": "./",
+          "module": "nodenext",
+          "target": "esnext",
+          "types": [
+            "node",
+            "express"
+          ],
+          "typeRoots": [
+            "./node_modules/@types",
+            "./src/types"
+          ],
+          "sourceMap": true,
+          "strict": true,
+          "emitDecoratorMetadata": true,
+          "experimentalDecorators": true,
+          "skipLibCheck": true,
+          "strictPropertyInitialization": false
+        },
+        "include": [
+          "src/**/*",
+          "db/migrations/**/*"
         ],
-        "typeRoots": [
-          "./node_modules/@types",
-          "./src/configuration"
-        ],
-        "sourceMap": true,
-        "declaration": true,
-        "declarationMap": true,
-        "noUncheckedIndexedAccess": true,
-        "exactOptionalPropertyTypes": true,
-        "strict": true,
-        "jsx": "react-jsx",
-        "verbatimModuleSyntax": false,
-        "isolatedModules": true,
-        "noUncheckedSideEffectImports": true,
-        "moduleDetection": "force",
-        "skipLibCheck": true,
-        "emitDecoratorMetadata": true,
-        "experimentalDecorators": true,
-        "strictPropertyInitialization": false
-      },
-      "include": [
-        "src"
-      ]
-    }
+        "files": [
+          "src/types/express.d.ts"
+        ]
+      }

@@ -5,6 +5,10 @@ import { OrderItem } from "./entities/order-item.entity";
 import { Product } from "../product/product.entity";
 import { User } from "../user/user.entity";
 import { AppDataSource as dataSource } from "../data-source";
+import { createAuthorizeMiddleware } from "../middlewares/auth.middleware";
+import { UserService } from "../user/user.service";
+import { isOrderOwnerMiddleware } from "../middlewares/is-order-owner.middleware";
+import { checkAdminMiddleware } from "../middlewares/check-admin.middleware";
 
 const orderController = new OrderController(
     dataSource.getRepository(Order),
@@ -13,24 +17,25 @@ const orderController = new OrderController(
     dataSource.getRepository(User)
 );
 
+// authorize middlewares
+const authorize = createAuthorizeMiddleware(new UserService(dataSource.getRepository(User)));
+const authorizeAndCheckOwner = [authorize, isOrderOwnerMiddleware];
+const authorizeAndCheckAdmin = [authorize, checkAdminMiddleware];
+
 const router = Router();
 
-// Create order
-router.post("/orders", orderController.createOrder);
+router.post("/", authorize, orderController.createOrder);
 
-// Get order by ID (with items)
-router.get("/orders/:id", orderController.getOrder);
+router.get("/current", authorizeAndCheckOwner, orderController.getCurrentOrder);
 
-// Cancel order
-router.post("/orders/:id/cancel", orderController.cancelOrder);
+router.get("/:id", authorizeAndCheckOwner, orderController.getOrder);
 
-// Add item to order
-router.post("/orders/:id/items", orderController.addItemToOrder);
+router.post("/:id/cancel", authorizeAndCheckOwner, orderController.cancelOrder);
 
-// Delete item from order
-router.delete("/orders/items/:itemId", orderController.deleteItemFromOrder);
+router.post("/:id/items", authorizeAndCheckOwner, orderController.addItemToOrder);
 
-// Mark order as completed (paid)
-router.post("/orders/:id/complete", orderController.markOrderCompleted);
+router.delete("/items/:itemId", authorizeAndCheckOwner, orderController.deleteItemFromOrder);
+
+router.post("/:id/complete", authorizeAndCheckAdmin, orderController.markOrderCompleted);
 
 export default router;

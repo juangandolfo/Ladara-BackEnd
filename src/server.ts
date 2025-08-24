@@ -6,8 +6,11 @@ import bodyParser from 'body-parser';
 import cors from 'cors';
 import AuthRoutes from './auth/auth.routes';
 import {User} from './user/user.entity';
+import {UserService} from './user/user.service';
 import passport from 'passport';
 import dotenv from 'dotenv';
+import orderRoutes from "./order/order.routes";
+import discountRoutes from "./discount/discount.routes";
 
 dotenv.config();
 
@@ -17,10 +20,9 @@ const PORT = process.env.PORT || 3000;
 (async () => {
     try {
         await AppDataSource.initialize();
-        console.log('✅ Database connection established');
 
-        const authRepository = AppDataSource.getRepository(User);
-        const authRouter = await AuthRoutes(authRepository);
+        const userRepository = AppDataSource.getRepository(User);
+        const authRouter = await AuthRoutes(userRepository);
 
         // Middleware
         app.use(cors());
@@ -30,7 +32,7 @@ const PORT = process.env.PORT || 3000;
         app.use(express.urlencoded({extended: true}));
         app.use(passport.initialize());
 
-        // CORS middleware
+        // CORS middlewares
         app.use((req, res, next) => {
             res.header('Access-Control-Allow-Origin', '*');
             res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -42,7 +44,7 @@ const PORT = process.env.PORT || 3000;
             }
         });
 
-        // Logging middleware
+        // Logging middlewares
         app.use((req, res, next) => {
             console.log("Incoming request:", req.method, req.url);
             next();
@@ -51,33 +53,8 @@ const PORT = process.env.PORT || 3000;
         // Routes
         app.use('/auth', authRouter);
         app.use('/api/products', productRoutes);
-
-        app.get('/health', (req, res) => {
-            res.status(200).json({
-                success: true,
-                message: 'Server is running',
-                timestamp: new Date().toISOString()
-            });
-        });
-
-        // 404 handler
-        app.use((req, res) => {
-            res.status(404).json({
-                success: false,
-                message: 'Endpoint not found',
-                path: req.originalUrl
-            });
-        });
-
-        // Error handler, this should be the last middleware
-        app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-            console.error('Error:', error);
-            res.status(error.status || 500).json({
-                success: false,
-                message: error.message || 'Internal server error',
-                ...(process.env.NODE_ENV === 'development' && {stack: error.stack})
-            });
-        });
+        app.use('/api/orders', orderRoutes);
+        app.use('/api/discounts', discountRoutes);
 
         app.listen(PORT, () => {
             console.log(`Server is running on port ${PORT}`);

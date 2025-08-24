@@ -17,11 +17,25 @@ export class OrderService {
         this.userRepo = userRepo;
     }
 
-    async createOrder(userId: number): Promise<Order> {
-        const user = await this.userRepo.findOneBy({ id: String(userId) });
+    async createOrder(userId: string): Promise<Order> {
+        const user = await this.userRepo.findOneBy({id: userId});
         if (!user) throw new Error("User not found");
-        const order = this.orderRepo.create({ user, status: "pending", total: 0, items: [] });
+
+        const existingOrder = await this.orderRepo.findOne({
+            where: {user: {id: userId}, status: "pending"},
+            relations: ["items", "items.product"],
+        });
+        if (existingOrder) return existingOrder;
+
+        const order = this.orderRepo.create({user, status: "pending", total: 0, items: []});
         return this.orderRepo.save(order);
+    }
+
+    async getCurrentOrder(userId: string): Promise<Order[]> {
+        return this.orderRepo.find({
+            where: {user: {id: userId}, status: "pending"},
+            relations: ["items", "items.product"],
+        });
     }
 
     async getOrder(orderId: number): Promise<Order | null> {

@@ -20,6 +20,10 @@ import { Column, DeleteDateColumn, Entity, PrimaryGeneratedColumn } from "typeor
         @Column("int", { default: 0 })
         stock: number;
 
+        @Column({ length: 50, nullable: false })
+        category: string;
+
         @DeleteDateColumn()
-        deletedAt?: Date; 
+        deletedAt?: Date;
+
     }

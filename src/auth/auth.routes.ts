@@ -43,5 +43,27 @@ export default async function AuthRoutes(userRepository: Repository<User>): Prom
         (req: Request, res: Response) => authController.googleCallback(req, res)
     );
 
+    //me
+    router.get("/me", async (req: Request, res: Response) => {
+        try {
+            const authHeader = req.headers.authorization;
+            if (!authHeader) {
+                return res.status(401).json({ error: "No authorization header" });
+            }
+            const token = authHeader.split(" ")[1];
+            if (!token) {
+                return res.status(401).json({ error: "No token provided" });
+            }
+            const user = await authService.verifyToken(token);
+            if (!user) {
+                return res.status(401).json({ error: "Invalid token" });
+            }
+            res.status(200).json({ user });
+        } catch (error: any) {
+            const customMessage = `Failed to fetch user info: \n ${error.message}`;
+            res.status(500).json({ error: customMessage });
+        }
+    });
+
     return router;
 }

@@ -1,22 +1,23 @@
-import { Entity, PrimaryGeneratedColumn, Column } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from "typeorm";
+    import { User } from "../user/user.entity";
 
-@Entity()
-export class Discount {
-    @PrimaryGeneratedColumn()
-    id: number;
+    @Entity()
+    export class Discount {
+        @PrimaryGeneratedColumn()
+        id: number;
 
-    @Column({ nullable: false })
-    clientId: string;
+        @ManyToOne(() => User, { nullable: false })
+        user: User;
 
-    @Column("decimal", { precision: 5, scale: 2 })
-    value: number;
+        @Column("decimal", { precision: 5, scale: 2 })
+        value: number;
 
-    @Column({ default: "fixed" })
-    type: "fixed" | "percent";
+        @Column({ default: "fixed" })
+        type: "fixed" | "percent";
 
-    @Column({ nullable: true })
-    description: string;
+        @Column({ nullable: true })
+        description: string;
 
-    @Column({ type: "int", nullable: true })
-    usesLeft: number | null; // null = unlimited uses
-}
+        @Column({ type: "int", nullable: true })
+        usesLeft: number | null; // null = unlimited uses
+    }

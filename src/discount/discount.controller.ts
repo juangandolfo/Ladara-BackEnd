@@ -38,11 +38,4 @@ export class DiscountController {
         const discounts = await this.discountService.listDiscounts();
         res.json({ success: true, data: discounts });
     };
-
-    useDiscount = async (req: Request, res: Response) => {
-        const id = Number(req.params.id);
-        const used = await this.discountService.useDiscount(id);
-        if (!used) return res.status(400).json({ success: false, message: "Discount not available" });
-        res.json({ success: true, message: "Discount used" });
-    };
 }

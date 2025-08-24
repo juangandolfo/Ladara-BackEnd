@@ -1,6 +1,9 @@
-import { Repository, SelectQueryBuilder } from "typeorm";
-import { AppDataSource } from "../data-source";
-import { Product } from "./product.entity";
+import {Repository, SelectQueryBuilder} from "typeorm";
+import {AppDataSource} from "../data-source";
+import {Product} from "./product.entity";
+import {User} from "../user/user.entity";
+import {DiscountService} from "../discount/discount.service";
+import {Discount} from "../discount/discount.entity";
 
 export interface ProductFilters {
     id?: number;
@@ -29,45 +32,59 @@ export interface ProductFilterResult {
 
 export class ProductService {
     private productRepository: Repository<Product>;
+    private discountService: DiscountService;
 
     constructor() {
         this.productRepository = AppDataSource.getRepository(Product);
+        this.discountService = new DiscountService(AppDataSource.getRepository(Discount));
     }
 
     /**
      * Filter products with multiple optional filters
      */
-    async filterProducts(filters: ProductFilters): Promise<ProductFilterResult> {
+    async filterProducts(filters: ProductFilters, userId: string): Promise<ProductFilterResult> {
         try {
             const queryBuilder = this.productRepository.createQueryBuilder("product");
-            
+
             // Include or exclude soft-deleted products
             if (filters.includeDeleted) {
                 queryBuilder.withDeleted();
             }
-            
+
             // Apply filters
             this.applyFilters(queryBuilder, filters);
-            
+
             // Apply sorting
             this.applySorting(queryBuilder, filters);
-            
+
             // Get total count before pagination
             const total = await queryBuilder.getCount();
-            
+
             // Apply pagination
             this.applyPagination(queryBuilder, filters);
-            
+
             // Execute query
             const products = await queryBuilder.getMany();
-            
+
+            // Fetch user (assuming you have userId)
+            const user = await AppDataSource.getRepository(User).findOneBy({id: userId});
+
+            const productsWithDiscount = await Promise.all(
+                products.map(async (product) => {
+                    const discountedPrice = user
+                        ? await this.applyDiscountsToPrice(product.id, product.price, user)
+                        : product.price;
+                    return {...product, discountedPrice};
+                })
+            );
+
+            // Use productsWithDiscount in your response
             return {
-                products,
+                products: productsWithDiscount,
                 total,
-                count: products.length,
+                count: productsWithDiscount.length,
                 appliedFilters: this.sanitizeFilters(filters)
             };
-            
         } catch (error) {
             throw new Error(`Error filtering products: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
@@ -79,56 +96,56 @@ export class ProductService {
     private applyFilters(queryBuilder: SelectQueryBuilder<Product>, filters: ProductFilters): void {
         // Exact ID match
         if (filters.id !== undefined) {
-            queryBuilder.andWhere("product.id = :id", { id: filters.id });
+            queryBuilder.andWhere("product.id = :id", {id: filters.id});
         }
 
         // Name partial search (case-insensitive)
         if (filters.name) {
-            queryBuilder.andWhere("LOWER(product.name) LIKE LOWER(:name)", { 
-                name: `%${filters.name}%` 
+            queryBuilder.andWhere("LOWER(product.name) LIKE LOWER(:name)", {
+                name: `%${filters.name}%`
             });
         }
 
         // Description partial search (case-insensitive)
         if (filters.description) {
-            queryBuilder.andWhere("LOWER(product.description) LIKE LOWER(:description)", { 
-                description: `%${filters.description}%` 
+            queryBuilder.andWhere("LOWER(product.description) LIKE LOWER(:description)", {
+                description: `%${filters.description}%`
             });
         }
 
         // Code partial search (case-insensitive)
         if (filters.code) {
-            queryBuilder.andWhere("LOWER(product.code) LIKE LOWER(:code)", { 
-                code: `%${filters.code}%` 
+            queryBuilder.andWhere("LOWER(product.code) LIKE LOWER(:code)", {
+                code: `%${filters.code}%`
             });
         }
 
         // Exact price match
         if (filters.price !== undefined) {
-            queryBuilder.andWhere("product.price = :price", { price: filters.price });
+            queryBuilder.andWhere("product.price = :price", {price: filters.price});
         }
 
         // Price range filters
         if (filters.minPrice !== undefined) {
-            queryBuilder.andWhere("product.price >= :minPrice", { minPrice: filters.minPrice });
+            queryBuilder.andWhere("product.price >= :minPrice", {minPrice: filters.minPrice});
         }
 
         if (filters.maxPrice !== undefined) {
-            queryBuilder.andWhere("product.price <= :maxPrice", { maxPrice: filters.maxPrice });
+            queryBuilder.andWhere("product.price <= :maxPrice", {maxPrice: filters.maxPrice});
         }
 
         // Exact stock match
         if (filters.stock !== undefined) {
-            queryBuilder.andWhere("product.stock = :stock", { stock: filters.stock });
+            queryBuilder.andWhere("product.stock = :stock", {stock: filters.stock});
         }
 
         // Stock range filters
         if (filters.minStock !== undefined) {
-            queryBuilder.andWhere("product.stock >= :minStock", { minStock: filters.minStock });
+            queryBuilder.andWhere("product.stock >= :minStock", {minStock: filters.minStock});
         }
 
         if (filters.maxStock !== undefined) {
-            queryBuilder.andWhere("product.stock <= :maxStock", { maxStock: filters.maxStock });
+            queryBuilder.andWhere("product.stock <= :maxStock", {maxStock: filters.maxStock});
         }
     }
 
@@ -138,7 +155,7 @@ export class ProductService {
     private applySorting(queryBuilder: SelectQueryBuilder<Product>, filters: ProductFilters): void {
         const sortBy = filters.sortBy || 'id';
         const sortOrder = filters.sortOrder || 'ASC';
-        
+
         queryBuilder.orderBy(`product.${sortBy}`, sortOrder);
     }
 
@@ -160,13 +177,13 @@ export class ProductService {
      */
     private sanitizeFilters(filters: ProductFilters): ProductFilters {
         const sanitized: Partial<ProductFilters> = {};
-        
+
         Object.entries(filters).forEach(([key, value]) => {
             if (value !== undefined && value !== null && value !== '') {
                 (sanitized as any)[key] = value;
             }
         });
-        
+
         return sanitized as ProductFilters;
     }
 
@@ -176,7 +193,7 @@ export class ProductService {
     async getAllProducts(includeDeleted: boolean = false): Promise<Product[]> {
         try {
             if (includeDeleted) {
-                return await this.productRepository.find({ withDeleted: true });
+                return await this.productRepository.find({withDeleted: true});
             }
             return await this.productRepository.find();
         } catch (error) {
@@ -190,12 +207,12 @@ export class ProductService {
     async getProductById(id: number, includeDeleted: boolean = false): Promise<Product | null> {
         try {
             if (includeDeleted) {
-                return await this.productRepository.findOne({ 
-                    where: { id }, 
-                    withDeleted: true 
+                return await this.productRepository.findOne({
+                    where: {id},
+                    withDeleted: true
                 });
             }
-            return await this.productRepository.findOneBy({ id });
+            return await this.productRepository.findOneBy({id});
         } catch (error) {
             throw new Error(`Error fetching product: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
@@ -205,6 +222,7 @@ export class ProductService {
      * Create a new product
      */
     async createProduct(productData: Partial<Product>): Promise<Product> {
+        console.log("Filters received:sandadshahdshsad");
         try {
             const product = this.productRepository.create(productData);
             return await this.productRepository.save(product);
@@ -223,7 +241,7 @@ export class ProductService {
             if (!existingProduct) {
                 return null;
             }
-            
+
             await this.productRepository.update(id, productData);
             return await this.getProductById(id, false);
         } catch (error) {
@@ -241,7 +259,7 @@ export class ProductService {
             if (!existingProduct) {
                 return false;
             }
-            
+
             const result = await this.productRepository.softDelete(id);
             return (result.affected !== undefined && result.affected !== null && result.affected > 0);
         } catch (error) {
@@ -259,7 +277,7 @@ export class ProductService {
             if (!deletedProduct || !deletedProduct.deletedAt) {
                 return false;
             }
-            
+
             const result = await this.productRepository.restore(id);
             return (result.affected !== undefined && result.affected !== null && result.affected > 0);
         } catch (error) {
@@ -293,5 +311,28 @@ export class ProductService {
         } catch (error) {
             throw new Error(`Error fetching deleted products: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
+    }
+
+    /**
+     * aux function to find and apply discounts to a product price
+     */
+    async applyDiscountsToPrice(productId: number, originalPrice: number, user: User): Promise<number> {
+        const discounts = await this.discountService.listDiscountsByUser(user.id);
+        let finalPrice = originalPrice;
+
+        for await (const discount of discounts) {
+            if (discount.type === 'percent') {
+                const discountedPrice = originalPrice * (1 - (discount.value / 100));
+                if (discountedPrice < finalPrice) {
+                    finalPrice = discountedPrice;
+                }
+            } else if (discount.type === 'fixed') {
+                const discountedPrice = originalPrice - discount.value;
+                if (discountedPrice < finalPrice) {
+                    finalPrice = discountedPrice;
+                }
+            }
+        }
+        return finalPrice;
     }
 }
