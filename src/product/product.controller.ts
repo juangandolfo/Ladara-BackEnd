@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { ProductService } from './product.service';
-import { ProductFilterDto, CreateProductDto, UpdateProductDto } from './product.dto';
+import { ProductFilterDto, CreateProductDto, UpdateProductDto} from "../dtos/product.dto";
 
 export class ProductController {
     private productService: ProductService;
@@ -9,12 +9,9 @@ export class ProductController {
         this.productService = new ProductService();
     }
 
-    /**
-     * GET /products/query - Filter products with query parameters
-     */
     filterProductsQuery = async (req: Request, res: Response): Promise<void> => {
         try {
-            const filters = req.validatedQuery as ProductFilterDto;
+            const filters = req.query as ProductFilterDto;
 
             // Additional validation for price ranges
             if (filters.minPrice !== undefined && filters.maxPrice !== undefined && filters.minPrice > filters.maxPrice) {
@@ -55,9 +52,6 @@ export class ProductController {
         }
     };
 
-    /**
-     * POST /products/filter - Filter products with request body
-     */
     filterProductsBody = async (req: Request, res: Response): Promise<void> => {
         try {
             const filters = req.body as ProductFilterDto;
@@ -101,9 +95,6 @@ export class ProductController {
         }
     };
 
-    /**
-     * GET /products - Get all products
-     */
     getAllProducts = async (req: Request, res: Response): Promise<void> => {
         try {
             const products = await this.productService.getAllProducts();
@@ -123,9 +114,6 @@ export class ProductController {
         }
     };
 
-    /**
-     * GET /products/:id - Get product by ID
-     */
     getProductById = async (req: Request, res: Response): Promise<void> => {
         try {
             const idParam = req.params.id;
@@ -172,9 +160,6 @@ export class ProductController {
         }
     };
 
-    /**
-     * GET /products/deleted - Get all soft-deleted products
-     */
     getDeletedProducts = async (req: Request, res: Response): Promise<void> => {
         try {
             const products = await this.productService.getDeletedProducts();
@@ -194,9 +179,25 @@ export class ProductController {
         }
     };
 
-    /**
-     * POST /products - Create a new product
-     */
+    getAllCategories = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const categories = await this.productService.getAllCategories();
+
+            res.status(200).json({
+                success: true,
+                message: 'Categories retrieved successfully',
+                data: categories,
+                count: categories.length
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: 'Error retrieving categories',
+                error: error instanceof Error ? error.message : 'Unknown error'
+            });
+        }
+    }
+
     createProduct = async (req: Request, res: Response): Promise<void> => {
         try {
             const productData = req.body as CreateProductDto;
@@ -216,9 +217,7 @@ export class ProductController {
         }
     };
 
-    /**
-     * PUT /products/:id - Update a product
-     */
+
     updateProduct = async (req: Request, res: Response): Promise<void> => {
         try {
             const idParam = req.params.id;
@@ -266,9 +265,6 @@ export class ProductController {
         }
     };
 
-    /**
-     * DELETE /products/:id - Soft delete a product
-     */
     deleteProduct = async (req: Request, res: Response): Promise<void> => {
         try {
             const idParam = req.params.id;
@@ -314,9 +310,6 @@ export class ProductController {
         }
     };
 
-    /**
-     * POST /products/:id/restore - Restore a soft-deleted product
-     */
     restoreProduct = async (req: Request, res: Response): Promise<void> => {
         try {
             const idParam = req.params.id;
@@ -362,9 +355,6 @@ export class ProductController {
         }
     };
 
-    /**
-     * DELETE /products/:id/permanent - Permanently delete a product
-     */
     permanentlyDeleteProduct = async (req: Request, res: Response): Promise<void> => {
         try {
             const idParam = req.params.id;

@@ -16,6 +16,7 @@ export interface ProductFilters {
     stock?: number;
     minStock?: number;
     maxStock?: number;
+    category?: string;
     sortBy?: 'id' | 'name' | 'price' | 'description' | 'code' | 'stock';
     sortOrder?: 'ASC' | 'DESC';
     limit?: number;
@@ -147,6 +148,13 @@ export class ProductService {
         if (filters.maxStock !== undefined) {
             queryBuilder.andWhere("product.stock <= :maxStock", {maxStock: filters.maxStock});
         }
+
+        // Category exact match (case-insensitive)
+        if (filters.category) {
+            queryBuilder.andWhere("LOWER(product.category) = LOWER(:category)", {
+                category: filters.category
+            });
+        }
     }
 
     /**
@@ -215,6 +223,19 @@ export class ProductService {
             return await this.productRepository.findOneBy({id});
         } catch (error) {
             throw new Error(`Error fetching product: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+
+    async getAllCategories(): Promise<string[]> {
+        try {
+            const categories = await this.productRepository
+                .createQueryBuilder("product")
+                .select("DISTINCT product.category", "category")
+                .getRawMany();
+            console.log(categories);
+            return categories.map(c => c.category);
+        } catch (error) {
+            throw new Error(`Error fetching categories: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
 

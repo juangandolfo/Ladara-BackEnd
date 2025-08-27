@@ -59,6 +59,12 @@ export class ProductFilterDto {
     @Min(0, { message: 'Maximum stock must be greater than or equal to 0' })
     maxStock?: number;
 
+    //category
+    @IsOptional()
+    @IsString({ message: 'Category must be a string' })
+    @Length(1, 100, { message: 'Category must be between 1 and 100 characters' })
+    category?: string;
+
     @IsOptional()
     @IsIn(['id', 'name', 'price', 'description', 'code', 'stock'], {
         message: 'Sort by must be one of: id, name, price, description, code, stock'

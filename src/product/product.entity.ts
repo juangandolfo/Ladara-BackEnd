@@ -23,6 +23,9 @@ import { Column, DeleteDateColumn, Entity, PrimaryGeneratedColumn } from "typeor
         @Column({ length: 50, nullable: false })
         category: string;
 
+        @Column({ length: 255, nullable: false })
+        image: string;
+
         @DeleteDateColumn()
         deletedAt?: Date;
 

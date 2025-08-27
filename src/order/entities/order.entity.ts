@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn } from "typeorm";
 import { User} from "../../user/user.entity";
 import { OrderItem } from "./order-item.entity";
+import {OrderStatus} from "../types/order-status.type";
 
 @Entity()
 export class Order {
@@ -19,6 +20,10 @@ export class Order {
     @OneToMany(() => OrderItem, item => item.order, { cascade: true })
     items: OrderItem[];
 
-    @Column({ length: 20, default: "pending" })
-    status: string; // e.g. 'pending', 'completed'
+    @Column({
+      type: 'enum',
+      enum: OrderStatus,
+      default: OrderStatus.CART
+    })
+    status: OrderStatus;
 }

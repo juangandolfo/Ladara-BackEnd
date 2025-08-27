@@ -13,7 +13,7 @@ export const isOrderOwnerMiddleware = async (req: Request, res: Response, next: 
             return;
         }
 
-        if (!orderId) {
+        if (!orderId ) {
             res.status(400).json({ message: 'Order ID is required' });
             return;
         }

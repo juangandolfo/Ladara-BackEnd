@@ -15,6 +15,7 @@ import {
     OrderDto,
     OrderItemDto
 } from "../dtos/order.dto";
+import {DiscountService} from "../discount/discount.service";
 
 export class OrderController {
     private orderService: OrderService;
@@ -23,9 +24,10 @@ export class OrderController {
         orderRepo: Repository<Order>,
         itemRepo: Repository<OrderItem>,
         productRepo: Repository<Product>,
-        userRepo: Repository<User>
+        userRepo: Repository<User>,
+        private discountService: DiscountService
     ) {
-        this.orderService = new OrderService(orderRepo, itemRepo, productRepo, userRepo);
+        this.orderService = new OrderService(orderRepo, itemRepo, productRepo, userRepo, discountService);
     }
 
     createOrder = async (req: Request, res: Response<CreateOrderResponse>): Promise<void> => {
@@ -57,7 +59,14 @@ export class OrderController {
             return;
         }
         try {
-            const orders = await this.orderService.getCurrentOrder(userId);
+            let orders = await this.orderService.getCurrentOrder(userId);
+
+            // If no current orders exist, create a new one
+            if (!orders || orders.length === 0) {
+                const newOrder = await this.orderService.createOrder(userId);
+                orders = [newOrder];
+            }
+
             const ordersDto = orders.map(order => this.transformOrderToDto(order));
             res.status(200).json({success: true, message: "Orders retrieved successfully", data: ordersDto});
         } catch (error) {
@@ -84,20 +93,27 @@ export class OrderController {
         }
     };
 
-    cancelOrder = async (req: Request, res: Response<CancelOrderResponse>): Promise<void> => {
+    getOrdersByUser = async (req: Request, res: Response<GetCurrentOrderResponse>): Promise<void> => {
         try {
-            const orderId = Number(req.params.id);
-            const order = await this.orderService.cancelOrder(orderId);
-            if (!order) {
-                res.status(404).json({success: false, message: "Order not found"});
+            const user = req.entity as User;
+            console.log("llego aca")
+            const userId = user.id;
+            console.log("muero aca")
+            if (!userId) {
+                res.status(400).json({success: false, message: "User ID is required"});
                 return;
             }
-            const orderDto = this.transformOrderToDto(order);
-            res.status(200).json({success: true, message: "Order cancelled successfully", data: orderDto});
+            const orders = await this.orderService.getOrdersByUser(userId);
+            if (!orders || orders.length === 0) {
+                res.status(404).json({success: false, message: "No orders found for this user"});
+                return;
+            }
+            const ordersDto = orders.map(order => this.transformOrderToDto(order));
+            res.status(200).json({success: true, message: "Orders retrieved successfully", data: ordersDto});
         } catch (error) {
             res.status(500).json({success: false, message: error instanceof Error ? error.message : "Unknown error"});
         }
-    };
+    }
 
     deleteItemFromOrder = async (req: Request<{ itemId: string }>, res: Response): Promise<void> => {
         try {
@@ -127,7 +143,20 @@ export class OrderController {
                 res.status(400).json({success: false, message: "Product ID and quantity are required"});
                 return;
             }
-            const item = await this.orderService.addItemToOrder(orderId, Number(productId), Number(quantity));
+
+            // Check if item already exists in the order
+            const existingItem = await this.orderService.findItemInOrder(orderId, Number(productId));
+
+            let item;
+            if (existingItem) {
+                // Update existing item quantity
+                const newQuantity = existingItem.quantity + Number(quantity);
+                item = await this.orderService.updateItemQuantity(existingItem.id, newQuantity);
+            } else {
+                // Add new item to order
+                item = await this.orderService.addItemToOrder(orderId, Number(productId), Number(quantity));
+            }
+
             if (!item) {
                 res.status(404).json({success: false, message: "Order or product not found"});
                 return;
@@ -178,7 +207,11 @@ export class OrderController {
             product: item.product ? {
                 id: item.product.id,
                 name: item.product.name,
-                price: item.product.price
+                price: item.product.price,
+                discountedPrice: (item as any).discountedPrice, // If you have discounted price logic
+                image: item.product.image,
+                category: item.product.category,
+                description: item.product.description
             } : undefined
         };
     }

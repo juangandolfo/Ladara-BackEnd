@@ -4,6 +4,7 @@ import {Product} from "./product/product.entity";
 import {User} from "./user/user.entity";
 import {Order} from "./order/entities/order.entity";
 import {OrderItem} from "./order/entities/order-item.entity";
+import {Discount} from "./discount/discount.entity";
 
 dotenv.config();
 
@@ -16,7 +17,7 @@ export const AppDataSource = new DataSource({
     database: process.env.DB_NAME || "ladara",
     synchronize: true,
     logging: true,
-    entities: [Product, User, Order, OrderItem],
+    entities: [Product, User, Order, OrderItem, Discount],
     migrations: [`${__dirname}/../db/migrations/*.ts`],
     subscribers: [],
 });

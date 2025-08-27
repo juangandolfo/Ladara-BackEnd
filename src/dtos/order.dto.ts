@@ -15,6 +15,10 @@ export interface OrderItemDto {
     id: number;
     name: string;
     price: number;
+    discountedPrice: number;
+    image: string;
+    category: string;
+    description?: string;
   };
 }
 

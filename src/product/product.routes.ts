@@ -9,6 +9,7 @@ const adminOnly = [checkAdminMiddleware];
 
 
 router.get('/query', productController.filterProductsQuery);
+router.get('/categories', productController.getAllCategories);
 router.post('/filter', productController.filterProductsBody);
 
 router.get('/deleted', adminOnly, productController.getDeletedProducts);
