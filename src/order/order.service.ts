@@ -47,32 +47,11 @@ export class OrderService {
                     originalPrice,
                     order.user
                 );
-                (item as any).discountedPrice = discountedPrice; // Will be null if no discount
+                (item as any).discountedPrice = discountedPrice;
             }
         }
 
         return orders;
-    }
-
-    async getOrder(orderId: number): Promise<Order | null> {
-        const order = await this.orderRepo.findOne({
-            where: {id: orderId},
-            relations: ["items", "items.product", "user"],
-        });
-
-        if (!order) return null;
-
-        for (const item of order.items) {
-            const originalPrice = parseFloat(item.price.toString());
-            const discountedPrice = await this.applyDiscountsToPrice(
-                item.product.id,
-                originalPrice,
-                order.user
-            );
-            (item as any).discountedPrice = discountedPrice; // Will be null if no discount
-        }
-
-        return order;
     }
 
     async getOrdersByUser(userId: string): Promise<Order[]> {
@@ -90,58 +69,16 @@ export class OrderService {
                     originalPrice,
                     order.user
                 );
-                (item as any).discountedPrice = discountedPrice; // Will be null if no discount
+                (item as any).discountedPrice = discountedPrice;
             }
         }
 
         return orders;
     }
 
-    async checkAndApplyDiscounts(order: Order): Promise<void> {
-        // Ensure order has items and user loaded
-        if (!order.items || !order.user) {
-            const fullOrder = await this.orderRepo.findOne({
-                where: {id: order.id},
-                relations: ['items', 'items.product', 'user']
-            });
-            if (!fullOrder) return;
-            order.items = fullOrder.items;
-            order.user = fullOrder.user;
-        }
-
-        let newTotal = 0;
-
-        // Apply discounts to each item
-        for (const item of order.items) {
-            const originalPrice = parseFloat(item.price.toString());
-            const discountedPrice = await this.applyDiscountsToPrice(
-                item.product.id,
-                originalPrice,
-                order.user
-            );
-
-            // Update item price if discount applied
-            if (discountedPrice && discountedPrice < originalPrice) {
-                item.price = parseFloat(discountedPrice.toFixed(2));
-                await this.itemRepo.save(item);
-            }
-
-            if (discountedPrice) {
-                newTotal += discountedPrice * item.quantity;
-            } else {
-                newTotal += originalPrice * item.quantity;
-            }
-        }
-
-        // Update order total
-        order.total = parseFloat(newTotal.toFixed(2));
-        await this.orderRepo.save(order);
-    }
-
     async applyDiscountsToPrice(productId: number, originalPrice: number, user: User): Promise<number | null> {
         const discounts = await this.discountService.listDiscountsByUser(user.id);
 
-        // If no discounts available, return null
         if (!discounts || discounts.length === 0) {
             return null;
         }
@@ -165,7 +102,6 @@ export class OrderService {
             }
         }
 
-        // Return null if no discount was actually applied
         return discountApplied ? finalPrice : null;
     }
 
@@ -182,7 +118,6 @@ export class OrderService {
         });
         await this.itemRepo.save(item);
 
-        // Convert to numbers and use parseFloat for decimal arithmetic
         order.total = parseFloat(order.total.toString()) + (parseFloat(product.price.toString()) * quantity);
         await this.orderRepo.save(order);
         return item;
@@ -196,7 +131,7 @@ export class OrderService {
         if (!item) return null;
 
         const order = item.order;
-        // Convert to numbers for proper arithmetic
+
         order.total = parseFloat(order.total.toString()) - (parseFloat(item.price.toString()) * item.quantity);
         item.quantity = quantity;
         await this.itemRepo.save(item);

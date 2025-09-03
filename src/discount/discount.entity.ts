@@ -19,5 +19,5 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from "typeorm";
         description: string;
 
         @Column({ type: "int", nullable: true })
-        usesLeft: number | null; // null = unlimited uses
+        usesLeft: number | null; // null = usos ilimitados
     }

@@ -22,14 +22,11 @@ const orderController = new OrderController(
     discountService
 );
 
-// authorize middlewares
 const authorize = createAuthorizeMiddleware(new UserService(dataSource.getRepository(User)));
 const authorizeAndCheckOwner = [authorize, isOrderOwnerMiddleware];
 const authorizeAndCheckAdmin = [authorize, checkAdminMiddleware];
 
 const router = Router();
-
-router.post("/", authorize, orderController.createOrder);
 
 router.get("/current", authorize, orderController.getCurrentOrder);
 

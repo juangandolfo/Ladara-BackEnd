@@ -40,34 +40,24 @@ export class ProductService {
         this.discountService = new DiscountService(AppDataSource.getRepository(Discount));
     }
 
-    /**
-     * Filter products with multiple optional filters
-     */
     async filterProducts(filters: ProductFilters, userId: string): Promise<ProductFilterResult> {
         try {
             const queryBuilder = this.productRepository.createQueryBuilder("product");
 
-            // Include or exclude soft-deleted products
             if (filters.includeDeleted) {
                 queryBuilder.withDeleted();
             }
 
-            // Apply filters
             this.applyFilters(queryBuilder, filters);
 
-            // Apply sorting
             this.applySorting(queryBuilder, filters);
 
-            // Get total count before pagination
             const total = await queryBuilder.getCount();
 
-            // Apply pagination
             this.applyPagination(queryBuilder, filters);
 
-            // Execute query
             const products = await queryBuilder.getMany();
 
-            // Fetch user (assuming you have userId)
             const user = await AppDataSource.getRepository(User).findOneBy({id: userId});
 
             const productsWithDiscount = await Promise.all(
@@ -79,7 +69,6 @@ export class ProductService {
                 })
             );
 
-            // Use productsWithDiscount in your response
             return {
                 products: productsWithDiscount,
                 total,
@@ -91,42 +80,33 @@ export class ProductService {
         }
     }
 
-    /**
-     * Apply all filters to the query builder
-     */
     private applyFilters(queryBuilder: SelectQueryBuilder<Product>, filters: ProductFilters): void {
-        // Exact ID match
         if (filters.id !== undefined) {
             queryBuilder.andWhere("product.id = :id", {id: filters.id});
         }
 
-        // Name partial search (case-insensitive)
         if (filters.name) {
             queryBuilder.andWhere("LOWER(product.name) LIKE LOWER(:name)", {
                 name: `%${filters.name}%`
             });
         }
 
-        // Description partial search (case-insensitive)
         if (filters.description) {
             queryBuilder.andWhere("LOWER(product.description) LIKE LOWER(:description)", {
                 description: `%${filters.description}%`
             });
         }
 
-        // Code partial search (case-insensitive)
         if (filters.code) {
             queryBuilder.andWhere("LOWER(product.code) LIKE LOWER(:code)", {
                 code: `%${filters.code}%`
             });
         }
 
-        // Exact price match
         if (filters.price !== undefined) {
             queryBuilder.andWhere("product.price = :price", {price: filters.price});
         }
 
-        // Price range filters
         if (filters.minPrice !== undefined) {
             queryBuilder.andWhere("product.price >= :minPrice", {minPrice: filters.minPrice});
         }
@@ -135,12 +115,10 @@ export class ProductService {
             queryBuilder.andWhere("product.price <= :maxPrice", {maxPrice: filters.maxPrice});
         }
 
-        // Exact stock match
         if (filters.stock !== undefined) {
             queryBuilder.andWhere("product.stock = :stock", {stock: filters.stock});
         }
 
-        // Stock range filters
         if (filters.minStock !== undefined) {
             queryBuilder.andWhere("product.stock >= :minStock", {minStock: filters.minStock});
         }
@@ -149,7 +127,6 @@ export class ProductService {
             queryBuilder.andWhere("product.stock <= :maxStock", {maxStock: filters.maxStock});
         }
 
-        // Category exact match (case-insensitive)
         if (filters.category) {
             queryBuilder.andWhere("LOWER(product.category) = LOWER(:category)", {
                 category: filters.category
@@ -157,9 +134,6 @@ export class ProductService {
         }
     }
 
-    /**
-     * Apply sorting to the query builder
-     */
     private applySorting(queryBuilder: SelectQueryBuilder<Product>, filters: ProductFilters): void {
         const sortBy = filters.sortBy || 'id';
         const sortOrder = filters.sortOrder || 'ASC';
@@ -167,9 +141,6 @@ export class ProductService {
         queryBuilder.orderBy(`product.${sortBy}`, sortOrder);
     }
 
-    /**
-     * Apply pagination to the query builder
-     */
     private applyPagination(queryBuilder: SelectQueryBuilder<Product>, filters: ProductFilters): void {
         if (filters.limit !== undefined) {
             queryBuilder.limit(filters.limit);
@@ -180,9 +151,6 @@ export class ProductService {
         }
     }
 
-    /**
-     * Remove undefined values from filters for response
-     */
     private sanitizeFilters(filters: ProductFilters): ProductFilters {
         const sanitized: Partial<ProductFilters> = {};
 
@@ -195,9 +163,6 @@ export class ProductService {
         return sanitized as ProductFilters;
     }
 
-    /**
-     * Get all products without filters
-     */
     async getAllProducts(includeDeleted: boolean = false): Promise<Product[]> {
         try {
             if (includeDeleted) {
@@ -209,9 +174,6 @@ export class ProductService {
         }
     }
 
-    /**
-     * Get product by ID
-     */
     async getProductById(id: number, includeDeleted: boolean = false): Promise<Product | null> {
         try {
             if (includeDeleted) {
@@ -232,18 +194,13 @@ export class ProductService {
                 .createQueryBuilder("product")
                 .select("DISTINCT product.category", "category")
                 .getRawMany();
-            console.log(categories);
             return categories.map(c => c.category);
         } catch (error) {
             throw new Error(`Error fetching categories: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
 
-    /**
-     * Create a new product
-     */
     async createProduct(productData: Partial<Product>): Promise<Product> {
-        console.log("Filters received:sandadshahdshsad");
         try {
             const product = this.productRepository.create(productData);
             return await this.productRepository.save(product);
@@ -252,12 +209,8 @@ export class ProductService {
         }
     }
 
-    /**
-     * Update a product
-     */
     async updateProduct(id: number, productData: Partial<Product>): Promise<Product | null> {
         try {
-            // Check if product exists and is not soft deleted
             const existingProduct = await this.getProductById(id, false);
             if (!existingProduct) {
                 return null;
@@ -270,12 +223,8 @@ export class ProductService {
         }
     }
 
-    /**
-     * Soft delete a product
-     */
     async deleteProduct(id: number): Promise<boolean> {
         try {
-            // Check if product exists and is not already soft deleted
             const existingProduct = await this.getProductById(id, false);
             if (!existingProduct) {
                 return false;
@@ -288,12 +237,8 @@ export class ProductService {
         }
     }
 
-    /**
-     * Restore a soft-deleted product
-     */
     async restoreProduct(id: number): Promise<boolean> {
         try {
-            // Check if product exists in soft deleted state
             const deletedProduct = await this.getProductById(id, true);
             if (!deletedProduct || !deletedProduct.deletedAt) {
                 return false;
@@ -306,12 +251,8 @@ export class ProductService {
         }
     }
 
-    /**
-     * Permanently delete a product (hard delete)
-     */
     async permanentlyDeleteProduct(id: number): Promise<boolean> {
         try {
-            // This will permanently delete the product regardless of soft delete status
             const result = await this.productRepository.delete(id);
             return (result.affected !== undefined && result.affected !== null && result.affected > 0);
         } catch (error) {
@@ -319,9 +260,6 @@ export class ProductService {
         }
     }
 
-    /**
-     * Get only soft-deleted products
-     */
     async getDeletedProducts(): Promise<Product[]> {
         try {
             return await this.productRepository
@@ -334,9 +272,6 @@ export class ProductService {
         }
     }
 
-    /**
-     * aux function to find and apply discounts to a product price
-     */
     async applyDiscountsToPrice(productId: number, originalPrice: number, user: User): Promise<number> {
         const discounts = await this.discountService.listDiscountsByUser(user.id);
         let finalPrice = originalPrice;

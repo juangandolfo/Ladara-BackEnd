@@ -8,7 +8,6 @@ export class AuthController {
   async googleCallback(req: Request, res: Response) {
         try {
             const { user, token } = await this.authService.handleGoogleUser(req.user);
-            console.log("Google user handled successfully:", user);
             const targetOrigin = req.query.origin || '*';
             res.send(`
                 <script>

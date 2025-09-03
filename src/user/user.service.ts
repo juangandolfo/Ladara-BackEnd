@@ -6,7 +6,6 @@ export class UserService {
     }
 
     async getEntityById(id: string): Promise<User> {
-        console.log(`Fetching user with id: ${id}`);
         const user = await this.userRepository.findOne({where: {id}});
 
         if (!user) {

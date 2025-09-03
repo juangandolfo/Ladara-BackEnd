@@ -22,14 +22,11 @@ export default async function AuthRoutes(userRepository: Repository<User>): Prom
             callbackURL: process.env.CALLBACK_URL || "/auth/google/callback"
         },
         async (_accessToken, _refreshToken, profile, done) => {
-            console.log("=== GoogleStrategy callback hit ===");
             try {
                 if (!profile) throw new Error("No profile received from Google");
-                console.log("Google profile received:");
                 console.dir(profile, { depth: null });
                 return done(null, profile);
             } catch (err) {
-                console.error("Error in GoogleStrategy:", err);
                 return done(err);
             }
         }
@@ -43,7 +40,6 @@ export default async function AuthRoutes(userRepository: Repository<User>): Prom
         (req: Request, res: Response) => authController.googleCallback(req, res)
     );
 
-    //me
     router.get("/me", async (req: Request, res: Response) => {
         try {
             const authHeader = req.headers.authorization;

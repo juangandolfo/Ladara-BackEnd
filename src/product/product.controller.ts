@@ -13,7 +13,6 @@ export class ProductController {
         try {
             const filters = req.query as ProductFilterDto;
 
-            // Additional validation for price ranges
             if (filters.minPrice !== undefined && filters.maxPrice !== undefined && filters.minPrice > filters.maxPrice) {
                 res.status(400).json({
                     success: false,
@@ -22,7 +21,6 @@ export class ProductController {
                 return;
             }
 
-            // Additional validation for stock ranges
             if (filters.minStock !== undefined && filters.maxStock !== undefined && filters.minStock > filters.maxStock) {
                 res.status(400).json({
                     success: false,
@@ -56,7 +54,6 @@ export class ProductController {
         try {
             const filters = req.body as ProductFilterDto;
 
-            // Additional validation for price ranges
             if (filters.minPrice !== undefined && filters.maxPrice !== undefined && filters.minPrice > filters.maxPrice) {
                 res.status(400).json({
                     success: false,
@@ -65,7 +62,6 @@ export class ProductController {
                 return;
             }
 
-            // Additional validation for stock ranges
             if (filters.minStock !== undefined && filters.maxStock !== undefined && filters.minStock > filters.maxStock) {
                 res.status(400).json({
                     success: false,

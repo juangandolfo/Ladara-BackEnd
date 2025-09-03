@@ -8,10 +8,8 @@ import {User} from "../user/user.entity";
 import {
     AddItemResponse,
     AddItemToOrderDto,
-    CancelOrderResponse,
     CreateOrderResponse,
     GetCurrentOrderResponse,
-    GetOrderResponse,
     OrderDto,
     OrderItemDto
 } from "../dtos/order.dto";
@@ -30,38 +28,13 @@ export class OrderController {
         this.orderService = new OrderService(orderRepo, itemRepo, productRepo, userRepo, discountService);
     }
 
-    createOrder = async (req: Request, res: Response<CreateOrderResponse>): Promise<void> => {
-        try {
-            const user = req.entity;
-            if (!user) {
-                res.status(401).json({success: false, message: "Unauthorized"});
-                return;
-            }
-
-            const userId = user.id;
-            if (!userId) {
-                res.status(400).json({success: false, message: "User ID is required"});
-                return;
-            }
-            const order = await this.orderService.createOrder(userId);
-            const orderDto = this.transformOrderToDto(order);
-            res.status(201).json({success: true, message: "Order created successfully", data: orderDto});
-        } catch (error) {
-            res.status(500).json({success: false, message: error instanceof Error ? error.message : "Unknown error"});
-        }
-    };
-
     getCurrentOrder = async (req: Request, res: Response<GetCurrentOrderResponse>): Promise<void> => {
         const user = req.entity as User;
         const userId = user.id;
-        if (!userId) {
-            res.status(400).json({success: false, message: "User ID is required"});
-            return;
-        }
+
         try {
             let orders = await this.orderService.getCurrentOrder(userId);
 
-            // If no current orders exist, create a new one
             if (!orders || orders.length === 0) {
                 const newOrder = await this.orderService.createOrder(userId);
                 orders = [newOrder];
@@ -74,35 +47,11 @@ export class OrderController {
         }
     };
 
-    getOrder = async (req: Request, res: Response<GetOrderResponse>): Promise<void> => {
-        try {
-            const orderId = Number(req.params.id);
-            if (!orderId) {
-                res.status(400).json({success: false, message: "Order ID is required"});
-                return;
-            }
-            const order = await this.orderService.getOrder(orderId);
-            if (!order) {
-                res.status(404).json({success: false, message: "Order not found"});
-                return;
-            }
-            const orderDto = this.transformOrderToDto(order);
-            res.status(200).json({success: true, message: "Order retrieved successfully", data: orderDto});
-        } catch (error) {
-            res.status(500).json({success: false, message: error instanceof Error ? error.message : "Unknown error"});
-        }
-    };
-
     getOrdersByUser = async (req: Request, res: Response<GetCurrentOrderResponse>): Promise<void> => {
         try {
             const user = req.entity as User;
-            console.log("llego aca")
             const userId = user.id;
-            console.log("muero aca")
-            if (!userId) {
-                res.status(400).json({success: false, message: "User ID is required"});
-                return;
-            }
+
             const orders = await this.orderService.getOrdersByUser(userId);
             if (!orders || orders.length === 0) {
                 res.status(404).json({success: false, message: "No orders found for this user"});
@@ -118,10 +67,6 @@ export class OrderController {
     deleteItemFromOrder = async (req: Request<{ itemId: string }>, res: Response): Promise<void> => {
         try {
             const itemId = Number(req.params.itemId);
-            if (!itemId) {
-                res.status(400).json({success: false, message: "Item ID is required"});
-                return;
-            }
             const success = await this.orderService.deleteItemFromOrder(itemId);
             if (!success) {
                 res.status(404).json({success: false, message: "Order item not found"});
@@ -144,16 +89,13 @@ export class OrderController {
                 return;
             }
 
-            // Check if item already exists in the order
             const existingItem = await this.orderService.findItemInOrder(orderId, Number(productId));
 
             let item;
             if (existingItem) {
-                // Update existing item quantity
                 const newQuantity = existingItem.quantity + Number(quantity);
                 item = await this.orderService.updateItemQuantity(existingItem.id, newQuantity);
             } else {
-                // Add new item to order
                 item = await this.orderService.addItemToOrder(orderId, Number(productId), Number(quantity));
             }
 
@@ -188,11 +130,11 @@ export class OrderController {
     private transformOrderToDto(order: Order): OrderDto {
         return {
             id: order.id,
-            userId: order.user?.id || (order as any).userId, // Adjust based on your entity structure
+            userId: order.user?.id || (order as any).userId,
             status: order.status,
             total: order.total,
             createdAt: order.createdAt.toISOString(),
-            updatedAt: (order as any).updatedAt?.toISOString() || order.createdAt.toISOString(), // Fallback to createdAt if updatedAt doesn't exist
+            updatedAt: (order as any).updatedAt?.toISOString() || order.createdAt.toISOString(),
             items: order.items?.map(item => this.transformOrderItemToDto(item))
         };
     }
@@ -200,7 +142,7 @@ export class OrderController {
     private transformOrderItemToDto(item: OrderItem): OrderItemDto {
         return {
             id: item.id,
-            productId: item.product?.id || (item as any).productId, // Adjust based on your entity structure
+            productId: item.product?.id || (item as any).productId,
             quantity: item.quantity,
             price: item.price,
             total: item.quantity * item.price,
@@ -208,7 +150,7 @@ export class OrderController {
                 id: item.product.id,
                 name: item.product.name,
                 price: item.product.price,
-                discountedPrice: (item as any).discountedPrice, // If you have discounted price logic
+                discountedPrice: (item as any).discountedPrice,
                 image: item.product.image,
                 category: item.product.category,
                 description: item.product.description

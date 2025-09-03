@@ -8,7 +8,6 @@ export class AuthService {
     constructor(private userRepository: Repository<User>) {}
 
     async handleGoogleUser(profile: any): Promise<{ user: User, token: string }> {
-        console.log("debug profile:", JSON.stringify(profile, null, 2));
         let user = await this.userRepository.findOne({ where: { id: profile.id } });
 
         if (!user) {
@@ -31,7 +30,6 @@ export class AuthService {
         return { user, token };
     }
 
-    //me
     async verifyToken(token: string): Promise<{ user: User }> {
         try {
             const decoded = jwt.verify(token, SECRET_KEY) as { id: string; name: string };
