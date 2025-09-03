@@ -1,6 +1,6 @@
-import { Request, Response } from 'express';
-import { ProductService } from './product.service';
-import { ProductFilterDto, CreateProductDto, UpdateProductDto} from "../dtos/product.dto";
+import {Request, Response} from 'express';
+import {ProductService} from './product.service';
+import {ProductFilterDto, CreateProductDto, UpdateProductDto} from "../dtos/product.dto";
 
 export class ProductController {
     private productService: ProductService;
@@ -94,7 +94,7 @@ export class ProductController {
     getAllProducts = async (req: Request, res: Response): Promise<void> => {
         try {
             const products = await this.productService.getAllProducts();
-            
+
             res.status(200).json({
                 success: true,
                 message: 'Products retrieved successfully',
@@ -113,7 +113,7 @@ export class ProductController {
     getProductById = async (req: Request, res: Response): Promise<void> => {
         try {
             const idParam = req.params.id;
-            
+
             if (!idParam) {
                 res.status(400).json({
                     success: false,
@@ -123,7 +123,7 @@ export class ProductController {
             }
 
             const id = parseInt(idParam);
-            
+
             if (isNaN(id) || id <= 0) {
                 res.status(400).json({
                     success: false,
@@ -133,7 +133,7 @@ export class ProductController {
             }
 
             const product = await this.productService.getProductById(id);
-            
+
             if (!product) {
                 res.status(404).json({
                     success: false,
@@ -198,7 +198,7 @@ export class ProductController {
         try {
             const productData = req.body as CreateProductDto;
             const product = await this.productService.createProduct(productData);
-            
+
             res.status(201).json({
                 success: true,
                 message: 'Product created successfully',
@@ -217,7 +217,7 @@ export class ProductController {
     updateProduct = async (req: Request, res: Response): Promise<void> => {
         try {
             const idParam = req.params.id;
-            
+
             if (!idParam) {
                 res.status(400).json({
                     success: false,
@@ -227,7 +227,7 @@ export class ProductController {
             }
 
             const id = parseInt(idParam);
-            
+
             if (isNaN(id) || id <= 0) {
                 res.status(400).json({
                     success: false,
@@ -238,7 +238,7 @@ export class ProductController {
 
             const productData = req.body as UpdateProductDto;
             const product = await this.productService.updateProduct(id, productData);
-            
+
             if (!product) {
                 res.status(404).json({
                     success: false,
@@ -264,7 +264,7 @@ export class ProductController {
     deleteProduct = async (req: Request, res: Response): Promise<void> => {
         try {
             const idParam = req.params.id;
-            
+
             if (!idParam) {
                 res.status(400).json({
                     success: false,
@@ -274,7 +274,7 @@ export class ProductController {
             }
 
             const id = parseInt(idParam);
-            
+
             if (isNaN(id) || id <= 0) {
                 res.status(400).json({
                     success: false,
@@ -284,7 +284,7 @@ export class ProductController {
             }
 
             const deleted = await this.productService.deleteProduct(id);
-            
+
             if (!deleted) {
                 res.status(404).json({
                     success: false,
@@ -309,7 +309,7 @@ export class ProductController {
     restoreProduct = async (req: Request, res: Response): Promise<void> => {
         try {
             const idParam = req.params.id;
-            
+
             if (!idParam) {
                 res.status(400).json({
                     success: false,
@@ -319,7 +319,7 @@ export class ProductController {
             }
 
             const id = parseInt(idParam);
-            
+
             if (isNaN(id) || id <= 0) {
                 res.status(400).json({
                     success: false,
@@ -329,7 +329,7 @@ export class ProductController {
             }
 
             const restored = await this.productService.restoreProduct(id);
-            
+
             if (!restored) {
                 res.status(404).json({
                     success: false,
@@ -354,7 +354,7 @@ export class ProductController {
     permanentlyDeleteProduct = async (req: Request, res: Response): Promise<void> => {
         try {
             const idParam = req.params.id;
-            
+
             if (!idParam) {
                 res.status(400).json({
                     success: false,
@@ -364,7 +364,7 @@ export class ProductController {
             }
 
             const id = parseInt(idParam);
-            
+
             if (isNaN(id) || id <= 0) {
                 res.status(400).json({
                     success: false,
@@ -374,7 +374,7 @@ export class ProductController {
             }
 
             const deleted = await this.productService.permanentlyDeleteProduct(id);
-            
+
             if (!deleted) {
                 res.status(404).json({
                     success: false,
@@ -395,4 +395,4 @@ export class ProductController {
             });
         }
     };
- }
+}

@@ -11,6 +11,12 @@ import {isOrderOwnerMiddleware} from "../middlewares/is-order-owner.middleware";
 import {checkAdminMiddleware} from "../middlewares/check-admin.middleware";
 import {Discount} from "../discount/discount.entity";
 import {DiscountService} from "../discount/discount.service";
+import {
+    orderIdParamValidator,
+    itemIdParamValidator,
+    addItemToOrderValidators,
+    handleValidationErrors
+} from "./order.validators";
 
 const discountService = new DiscountService(dataSource.getRepository(Discount));
 
@@ -32,10 +38,10 @@ router.get("/current", authorize, orderController.getCurrentOrder);
 
 router.get("/", authorize, orderController.getOrdersByUser);
 
-router.post("/:id/items", authorizeAndCheckOwner, orderController.addItemToOrder);
+router.post("/:id/items", ...orderIdParamValidator, ...addItemToOrderValidators, handleValidationErrors, ...authorizeAndCheckOwner, orderController.addItemToOrder);
 
-router.delete("/items/:itemId", authorize, orderController.deleteItemFromOrder);
+router.delete("/items/:itemId", ...itemIdParamValidator, handleValidationErrors, authorize, orderController.deleteItemFromOrder);
 
-router.post("/:id/complete", authorizeAndCheckAdmin, orderController.markOrderCompleted);
+router.post("/:id/complete", ...orderIdParamValidator, handleValidationErrors, ...authorizeAndCheckAdmin, orderController.markOrderCompleted);
 
 export default router;
