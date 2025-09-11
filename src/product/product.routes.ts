@@ -8,11 +8,16 @@ import {
     filterProductsValidators,
     handleValidationErrors
 } from './product.validators';
+import {createAuthorizeMiddleware} from "../middlewares/auth.middleware";
+import {UserService} from "../user/user.service";
+import {AppDataSource as dataSource} from "../data-source";
+import {User} from "../user/user.entity";
 
 const router = Router();
 const productController = new ProductController();
 
-const adminOnly = [checkAdminMiddleware];
+const authorize = createAuthorizeMiddleware(new UserService(dataSource.getRepository(User)));
+const adminOnly = [authorize, checkAdminMiddleware];
 
 
 router.get('/query', ...filterProductsValidators, handleValidationErrors, productController.filterProductsQuery);

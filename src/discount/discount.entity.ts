@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from "typeorm";
+import {Entity, PrimaryGeneratedColumn, Column, ManyToOne, DeleteDateColumn} from "typeorm";
     import { User } from "../user/user.entity";
 
     @Entity()
@@ -20,4 +20,7 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from "typeorm";
 
         @Column({ type: "int", nullable: true })
         usesLeft: number | null; // null = usos ilimitados
+
+        @DeleteDateColumn({ nullable: true })
+        deletedAt?: Date;
     }

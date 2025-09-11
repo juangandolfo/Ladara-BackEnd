@@ -38,4 +38,9 @@ export class DiscountController {
         const discounts = await this.discountService.listDiscounts();
         res.json({ success: true, data: discounts });
     };
+
+    listDeletedDiscounts = async (_: Request, res: Response) => {
+        const discounts = await this.discountService.listDeletedDiscounts();
+        res.json({ success: true, data: discounts });
+    }
 }

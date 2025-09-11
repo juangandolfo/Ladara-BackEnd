@@ -7,9 +7,7 @@ export const productIdParamValidator = [
 ];
 
 export const createProductValidators = [
-    body("name")
-        .isString().withMessage("Name must be a string")
-        .notEmpty().withMessage("Name is required"),
+    body("name").isString().withMessage("Name must be a string").notEmpty().withMessage("Name is required"),
     body("price")
         .isFloat({min: 0}).withMessage("Price must be a non-negative number")
         .notEmpty().withMessage("Price is required"),

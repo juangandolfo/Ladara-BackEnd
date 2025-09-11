@@ -1,4 +1,4 @@
-import {Repository} from "typeorm";
+import {IsNull, Not, Repository} from "typeorm";
 import {Discount} from "./discount.entity";
 
 export class DiscountService {
@@ -28,6 +28,10 @@ export class DiscountService {
 
     async listDiscounts(): Promise<Discount[]> {
         return this.discountRepo.find();
+    }
+
+    async listDeletedDiscounts(): Promise<Discount[]> {
+        return this.discountRepo.find({withDeleted: true, where: {deletedAt: Not(IsNull())}});
     }
 
     async useDiscount(id: number): Promise<boolean> {
