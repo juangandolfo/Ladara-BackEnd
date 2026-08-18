@@ -15,6 +15,7 @@ import {
     orderIdParamValidator,
     itemIdParamValidator,
     addItemToOrderValidators,
+    updateItemQuantityValidators,
     handleValidationErrors
 } from "./order.validators";
 
@@ -39,6 +40,8 @@ router.get("/current", authorize, orderController.getCurrentOrder);
 router.get("/", authorize, orderController.getOrdersByUser);
 
 router.post("/:id/items", ...orderIdParamValidator, ...addItemToOrderValidators, handleValidationErrors, ...authorizeAndCheckOwner, orderController.addItemToOrder);
+
+router.put("/items/:itemId", ...itemIdParamValidator, ...updateItemQuantityValidators, handleValidationErrors, authorize, orderController.updateItemQuantityInOrder);
 
 router.delete("/items/:itemId", ...itemIdParamValidator, handleValidationErrors, authorize, orderController.deleteItemFromOrder);
 

@@ -20,6 +20,12 @@ export const addItemToOrderValidators = [
         .notEmpty().withMessage("Quantity is required"),
 ];
 
+export const updateItemQuantityValidators = [
+    body("quantity")
+        .isInt({min: 0}).withMessage("Quantity must be a non-negative integer")
+        .notEmpty().withMessage("Quantity is required"),
+];
+
 export function handleValidationErrors(req: Request, res: Response, next: NextFunction) {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

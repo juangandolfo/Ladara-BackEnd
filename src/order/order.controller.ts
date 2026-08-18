@@ -64,6 +64,29 @@ export class OrderController {
         }
     }
 
+    updateItemQuantityInOrder = async (req: Request<{ itemId: string }>, res: Response): Promise<void> => {
+        try {
+            const itemId = Number(req.params.itemId);
+            const quantity = Number(req.body.quantity);
+
+            if (!Number.isInteger(quantity) || quantity < 0) {
+                res.status(400).json({success: false, message: "Quantity must be a non-negative integer"});
+                return;
+            }
+
+            const item = await this.orderService.updateItemQuantity(itemId, quantity);
+            if (!item) {
+                res.status(404).json({success: false, message: "Order item not found"});
+                return;
+            }
+
+            const itemDto = this.transformOrderItemToDto(item);
+            res.status(200).json({success: true, message: "Item quantity updated successfully", data: itemDto});
+        } catch (error) {
+            res.status(500).json({success: false, message: error instanceof Error ? error.message : "Unknown error"});
+        }
+    }
+
     deleteItemFromOrder = async (req: Request<{ itemId: string }>, res: Response): Promise<void> => {
         try {
             const itemId = Number(req.params.itemId);

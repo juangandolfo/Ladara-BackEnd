@@ -131,11 +131,19 @@ export class OrderService {
         if (!item) return null;
 
         const order = item.order;
+        const unitPrice = parseFloat(item.price.toString());
 
-        order.total = parseFloat(order.total.toString()) - (parseFloat(item.price.toString()) * item.quantity);
+        if (quantity <= 0) {
+            order.total = parseFloat(order.total.toString()) - (unitPrice * item.quantity);
+            await this.itemRepo.delete(itemId);
+            await this.orderRepo.save(order);
+            return null;
+        }
+
+        order.total = parseFloat(order.total.toString()) - (unitPrice * item.quantity);
         item.quantity = quantity;
         await this.itemRepo.save(item);
-        order.total = parseFloat(order.total.toString()) + (parseFloat(item.price.toString()) * quantity);
+        order.total = parseFloat(order.total.toString()) + (unitPrice * quantity);
         await this.orderRepo.save(order);
         return item;
     }
@@ -147,9 +155,20 @@ export class OrderService {
         });
         if (!item) return false;
 
-        item.order.total = parseFloat(item.order.total.toString()) - (parseFloat(item.price.toString()) * item.quantity);
+        const unitPrice = parseFloat(item.price.toString());
+        const newQuantity = item.quantity - 1;
+
+        item.order.total = parseFloat(item.order.total.toString()) - unitPrice;
+
+        if (newQuantity <= 0) {
+            await this.itemRepo.delete(itemId);
+            await this.orderRepo.save(item.order);
+            return true;
+        }
+
+        item.quantity = newQuantity;
+        await this.itemRepo.save(item);
         await this.orderRepo.save(item.order);
-        await this.itemRepo.delete(itemId);
         return true;
     }
 
