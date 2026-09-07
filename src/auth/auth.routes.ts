@@ -50,7 +50,7 @@ export default async function AuthRoutes(userRepository: Repository<User>): Prom
             if (!token) {
                 return res.status(401).json({ error: "No token provided" });
             }
-            const user = await authService.verifyToken(token);
+            const { user } = await authService.verifyToken(token);
             if (!user) {
                 return res.status(401).json({ error: "Invalid token" });
             }

@@ -1,5 +1,6 @@
 import {Router} from "express";
 import {OrderController} from "./order.controller";
+import {CheckoutController} from "./checkout.controller";
 import {Order} from "./entities/order.entity";
 import {OrderItem} from "./entities/order-item.entity";
 import {Product} from "../product/product.entity";
@@ -29,11 +30,15 @@ const orderController = new OrderController(
     discountService
 );
 
+const checkoutController = new CheckoutController();
+
 const authorize = createAuthorizeMiddleware(new UserService(dataSource.getRepository(User)));
 const authorizeAndCheckOwner = [authorize, isOrderOwnerMiddleware];
 const authorizeAndCheckAdmin = [authorize, checkAdminMiddleware];
 
 const router = Router();
+
+router.get("/checkout", checkoutController.getCheckoutPage);
 
 router.get("/current", authorize, orderController.getCurrentOrder);
 

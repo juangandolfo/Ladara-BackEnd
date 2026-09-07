@@ -112,7 +112,7 @@ export class ProductController {
 
     getProductById = async (req: Request, res: Response): Promise<void> => {
         try {
-            const idParam = req.params.id;
+            const idParam = typeof req.params.id === 'string' ? req.params.id : req.params.id[0];
 
             if (!idParam) {
                 res.status(400).json({
@@ -216,7 +216,7 @@ export class ProductController {
 
     updateProduct = async (req: Request, res: Response): Promise<void> => {
         try {
-            const idParam = req.params.id;
+            const idParam = typeof req.params.id === 'string' ? req.params.id : req.params.id[0];
 
             if (!idParam) {
                 res.status(400).json({
@@ -263,7 +263,7 @@ export class ProductController {
 
     deleteProduct = async (req: Request, res: Response): Promise<void> => {
         try {
-            const idParam = req.params.id;
+            const idParam = typeof req.params.id === 'string' ? req.params.id : req.params.id[0];
 
             if (!idParam) {
                 res.status(400).json({
@@ -308,7 +308,7 @@ export class ProductController {
 
     restoreProduct = async (req: Request, res: Response): Promise<void> => {
         try {
-            const idParam = req.params.id;
+            const idParam = typeof req.params.id === 'string' ? req.params.id : req.params.id[0];
 
             if (!idParam) {
                 res.status(400).json({
@@ -353,7 +353,7 @@ export class ProductController {
 
     permanentlyDeleteProduct = async (req: Request, res: Response): Promise<void> => {
         try {
-            const idParam = req.params.id;
+            const idParam = typeof req.params.id === 'string' ? req.params.id : req.params.id[0];
 
             if (!idParam) {
                 res.status(400).json({

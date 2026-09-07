@@ -6,7 +6,7 @@ import { AppDataSource } from '../data-source';
 export const isOrderOwnerMiddleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const user = req.entity as User;
-        const orderId = req.params.id;
+        const orderId = typeof req.params.id === 'string' ? req.params.id : req.params.id[0];
 
         if (!user) {
             res.status(401).json({ message: 'User not authenticated' });
