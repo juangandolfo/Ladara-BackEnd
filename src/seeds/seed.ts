@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import { AppDataSource } from '../data-source';
 import { Product } from '../product/product.entity';
 import { User } from '../user/user.entity';
+import { BusinessSetting } from '../business-settings/business-setting.entity';
 import { v4 as uuidv4 } from 'uuid';
 
 dotenv.config();
@@ -27,6 +28,18 @@ async function runSeeds() {
       console.log('✓ Users seeded:', users.length);
     } else {
       console.log('✓ Users already exist, skipping...');
+    }
+
+    const businessSettingRepository = AppDataSource.getRepository(BusinessSetting);
+    const existingShippingCost = await businessSettingRepository.findOneBy({ key: 'shippingCost' });
+
+    if (!existingShippingCost) {
+      await businessSettingRepository.save({
+        key: 'shippingCost',
+        value: 8,
+        description: 'Delivery cost charged for active carts.',
+      });
+      console.log('✓ Shipping cost seeded: 8.00');
     }
 
     // Seed Products

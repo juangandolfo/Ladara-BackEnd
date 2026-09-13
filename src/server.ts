@@ -11,6 +11,7 @@ import passport from 'passport';
 import dotenv from 'dotenv';
 import orderRoutes from "./order/order.routes";
 import discountRoutes from "./discount/discount.routes";
+import businessSettingRoutes from "./business-settings/business-setting.routes";
 
 dotenv.config();
 
@@ -55,6 +56,7 @@ const PORT = process.env.PORT || 3000;
         app.use('/api/products', productRoutes);
         app.use('/api/orders', orderRoutes);
         app.use('/api/discounts', discountRoutes);
+        app.use('/api/settings', businessSettingRoutes);
 
         app.listen(PORT, () => {
             console.log(`Server is running on port ${PORT}`);

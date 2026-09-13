@@ -8,12 +8,12 @@ import {User} from "../user/user.entity";
 import {
     AddItemResponse,
     AddItemToOrderDto,
-    CreateOrderResponse,
     GetCurrentOrderResponse,
     OrderDto,
     OrderItemDto
 } from "../dtos/order.dto";
 import {DiscountService} from "../discount/discount.service";
+import {BusinessSettingService} from "../business-settings/business-setting.service";
 
 export class OrderController {
     private orderService: OrderService;
@@ -23,9 +23,10 @@ export class OrderController {
         itemRepo: Repository<OrderItem>,
         productRepo: Repository<Product>,
         userRepo: Repository<User>,
-        private discountService: DiscountService
+        private discountService: DiscountService,
+        businessSettingService?: BusinessSettingService
     ) {
-        this.orderService = new OrderService(orderRepo, itemRepo, productRepo, userRepo, discountService);
+        this.orderService = new OrderService(orderRepo, itemRepo, productRepo, userRepo, discountService, businessSettingService);
     }
 
     getCurrentOrder = async (req: Request, res: Response<GetCurrentOrderResponse>): Promise<void> => {
@@ -151,11 +152,17 @@ export class OrderController {
 
     // Helper methods to transform entities to DTOs
     private transformOrderToDto(order: Order): OrderDto {
+        const shippingCost = Number(order.shippingCost);
+        if (!Number.isFinite(shippingCost) || shippingCost < 0) {
+            throw new Error("Order shipping cost is invalid");
+        }
+
         return {
             id: order.id,
             userId: order.user?.id || (order as any).userId,
             status: order.status,
-            total: order.total,
+            total: Number(order.total.toString()),
+            shippingCost: Number(shippingCost.toFixed(2)),
             createdAt: order.createdAt.toISOString(),
             updatedAt: (order as any).updatedAt?.toISOString() || order.createdAt.toISOString(),
             items: order.items?.map(item => this.transformOrderItemToDto(item))

@@ -5,6 +5,7 @@ import {Product} from "../product/product.entity";
 import {User} from "../user/user.entity";
 import {DiscountService} from "../discount/discount.service";
 import {OrderStatus} from "./types/order-status.type";
+import {BusinessSettingService} from "../business-settings/business-setting.service";
 
 export class OrderService {
     private readonly orderRepo: Repository<Order>;
@@ -12,11 +13,19 @@ export class OrderService {
     private readonly productRepo: Repository<Product>;
     private readonly userRepo: Repository<User>;
 
-    constructor(orderRepo: Repository<Order>, itemRepo: Repository<OrderItem>, productRepo: Repository<Product>, userRepo: Repository<User>, private discountService: DiscountService) {
+    constructor(orderRepo: Repository<Order>, itemRepo: Repository<OrderItem>, productRepo: Repository<Product>, userRepo: Repository<User>, private discountService: DiscountService, private businessSettingService?: BusinessSettingService) {
         this.orderRepo = orderRepo;
         this.itemRepo = itemRepo;
         this.productRepo = productRepo;
         this.userRepo = userRepo;
+    }
+
+    static calculateCartTotal(subtotal: number, discountAmount: number, taxAmount: number, shippingCost: number): number {
+        const normalizedSubtotal = Number(subtotal.toFixed(2));
+        const normalizedDiscount = Number(discountAmount.toFixed(2));
+        const normalizedTax = Number(taxAmount.toFixed(2));
+        const normalizedShipping = Number(Math.max(0, shippingCost).toFixed(2));
+        return Number((normalizedSubtotal - normalizedDiscount + normalizedTax + normalizedShipping).toFixed(2));
     }
 
     async createOrder(userId: string): Promise<Order> {
@@ -29,7 +38,8 @@ export class OrderService {
         });
         if (existingOrder) return existingOrder;
 
-        const order = this.orderRepo.create({user, status: OrderStatus.CART, total: 0, items: []});
+        const shippingCost = await this.getCurrentShippingCost();
+        const order = this.orderRepo.create({user, status: OrderStatus.CART, total: shippingCost, shippingCost, items: []});
         return this.orderRepo.save(order);
     }
 
@@ -40,6 +50,9 @@ export class OrderService {
         });
 
         for (const order of orders) {
+            order.shippingCost = await this.getCurrentShippingCost();
+            order.total = await this.calculateOrderTotal(order);
+            await this.orderRepo.save(order);
             for (const item of order.items) {
                 const originalPrice = parseFloat(item.price.toString());
                 const discountedPrice = await this.applyDiscountsToPrice(
@@ -106,7 +119,10 @@ export class OrderService {
     }
 
     async addItemToOrder(orderId: number, productId: number, quantity: number): Promise<OrderItem | null> {
-        const order = await this.orderRepo.findOneBy({id: orderId});
+        const order = await this.orderRepo.findOne({
+            where: {id: orderId},
+            relations: ["items", "items.product", "user"],
+        });
         const product = await this.productRepo.findOneBy({id: productId});
         if (!order || !product) return null;
 
@@ -118,7 +134,9 @@ export class OrderService {
         });
         await this.itemRepo.save(item);
 
-        order.total = parseFloat(order.total.toString()) + (parseFloat(product.price.toString()) * quantity);
+        order.items = order.items ?? [];
+        order.shippingCost = await this.getCurrentShippingCost();
+        order.total = await this.calculateOrderTotal(order);
         await this.orderRepo.save(order);
         return item;
     }
@@ -126,24 +144,25 @@ export class OrderService {
     async updateItemQuantity(itemId: number, quantity: number): Promise<OrderItem | null> {
         const item = await this.itemRepo.findOne({
             where: {id: itemId},
-            relations: ["order", "product"],
+            relations: ["order", "order.user", "order.items", "order.items.product", "product"],
         });
         if (!item) return null;
 
         const order = item.order;
-        const unitPrice = parseFloat(item.price.toString());
-
         if (quantity <= 0) {
-            order.total = parseFloat(order.total.toString()) - (unitPrice * item.quantity);
             await this.itemRepo.delete(itemId);
+            order.items = order.items?.filter(existing => existing.id !== itemId) ?? [];
+            order.shippingCost = await this.getCurrentShippingCost();
+            order.total = await this.calculateOrderTotal(order);
             await this.orderRepo.save(order);
             return null;
         }
 
-        order.total = parseFloat(order.total.toString()) - (unitPrice * item.quantity);
         item.quantity = quantity;
         await this.itemRepo.save(item);
-        order.total = parseFloat(order.total.toString()) + (unitPrice * quantity);
+        order.items = order.items ?? [];
+        order.shippingCost = await this.getCurrentShippingCost();
+        order.total = await this.calculateOrderTotal(order);
         await this.orderRepo.save(order);
         return item;
     }
@@ -151,30 +170,37 @@ export class OrderService {
     async deleteItemFromOrder(itemId: number): Promise<boolean> {
         const item = await this.itemRepo.findOne({
             where: {id: itemId},
-            relations: ["order", "product"],
+            relations: ["order", "order.user", "order.items", "order.items.product", "product"],
         });
         if (!item) return false;
 
-        const unitPrice = parseFloat(item.price.toString());
         const newQuantity = item.quantity - 1;
-
-        item.order.total = parseFloat(item.order.total.toString()) - unitPrice;
 
         if (newQuantity <= 0) {
             await this.itemRepo.delete(itemId);
+            item.order.items = item.order.items?.filter(existing => existing.id !== itemId) ?? [];
+            item.order.shippingCost = await this.getCurrentShippingCost();
+            item.order.total = await this.calculateOrderTotal(item.order);
             await this.orderRepo.save(item.order);
             return true;
         }
 
         item.quantity = newQuantity;
         await this.itemRepo.save(item);
+        item.order.items = item.order.items ?? [];
+        item.order.shippingCost = await this.getCurrentShippingCost();
+        item.order.total = await this.calculateOrderTotal(item.order);
         await this.orderRepo.save(item.order);
         return true;
     }
 
     async markOrderCompleted(orderId: number): Promise<Order | null> {
-        const order = await this.orderRepo.findOneBy({id: orderId});
+        const order = await this.orderRepo.findOne({
+            where: {id: orderId},
+            relations: ["items", "items.product", "user"],
+        });
         if (!order) return null;
+        order.total = await this.calculateOrderTotal(order);
         order.status = OrderStatus.COMPLETED;
         return this.orderRepo.save(order);
     }
@@ -184,5 +210,34 @@ export class OrderService {
             where: {order: {id: orderId}, product: {id: productId}},
             relations: ["order", "product"],
         });
+    }
+
+    private async getCurrentShippingCost(): Promise<number> {
+        if (!this.businessSettingService) {
+            return 0;
+        }
+        return this.businessSettingService.getShippingCost();
+    }
+
+    private async calculateOrderTotal(order: Order): Promise<number> {
+        const items = order.items ?? [];
+        let itemSubtotal = 0;
+        let discountAmount = 0;
+
+        for (const item of items) {
+            const originalPrice = Number(item.price);
+            itemSubtotal += Number((originalPrice * item.quantity).toFixed(2));
+
+            if (order.user && item.product) {
+                const discountedPrice = await this.applyDiscountsToPrice(item.product.id, originalPrice, order.user);
+                if (discountedPrice !== null) {
+                    discountAmount += Number(((originalPrice - discountedPrice) * item.quantity).toFixed(2));
+                }
+            }
+        }
+
+        const taxAmount = Number((itemSubtotal * 0.08).toFixed(2));
+        const shippingCost = Number((order.shippingCost ?? await this.getCurrentShippingCost()).toString());
+        return OrderService.calculateCartTotal(itemSubtotal, discountAmount, taxAmount, shippingCost);
     }
 }

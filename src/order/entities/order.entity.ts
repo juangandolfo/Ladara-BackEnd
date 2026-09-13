@@ -14,8 +14,11 @@ export class Order {
     @CreateDateColumn()
     createdAt: Date;
 
-    @Column("decimal", { precision: 10, scale: 2 })
+    @Column("decimal", { precision: 10, scale: 2, default: 0 })
     total: number;
+
+    @Column("decimal", { precision: 10, scale: 2, default: 0 })
+    shippingCost: number;
 
     @OneToMany(() => OrderItem, item => item.order, { cascade: true })
     items: OrderItem[];

@@ -12,6 +12,8 @@ import {isOrderOwnerMiddleware} from "../middlewares/is-order-owner.middleware";
 import {checkAdminMiddleware} from "../middlewares/check-admin.middleware";
 import {Discount} from "../discount/discount.entity";
 import {DiscountService} from "../discount/discount.service";
+import {BusinessSettingService} from "../business-settings/business-setting.service";
+import {BusinessSetting} from "../business-settings/business-setting.entity";
 import {
     orderIdParamValidator,
     itemIdParamValidator,
@@ -21,13 +23,15 @@ import {
 } from "./order.validators";
 
 const discountService = new DiscountService(dataSource.getRepository(Discount));
+const businessSettingService = new BusinessSettingService(dataSource.getRepository(BusinessSetting));
 
 const orderController = new OrderController(
     dataSource.getRepository(Order),
     dataSource.getRepository(OrderItem),
     dataSource.getRepository(Product),
     dataSource.getRepository(User),
-    discountService
+    discountService,
+    businessSettingService
 );
 
 const checkoutController = new CheckoutController();
