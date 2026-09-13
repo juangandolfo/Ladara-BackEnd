@@ -42,6 +42,16 @@ async function runSeeds() {
       console.log('✓ Shipping cost seeded: 8.00');
     }
 
+    const existingFreeShippingThreshold = await businessSettingRepository.findOneBy({ key: 'freeShippingThreshold' });
+    if (!existingFreeShippingThreshold) {
+      await businessSettingRepository.save({
+        key: 'freeShippingThreshold',
+        value: 0,
+        description: 'Subtotal at which delivery becomes free for active carts. Zero disables free shipping.',
+      });
+      console.log('✓ Free shipping threshold seeded: disabled');
+    }
+
     // Seed Products
     const productRepository = AppDataSource.getRepository(Product);
     const existingProducts = await productRepository.count();

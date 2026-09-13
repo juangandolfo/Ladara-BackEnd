@@ -29,6 +29,33 @@ All endpoints return a standardized response format:
 
 ---
 
+## Business Settings Endpoints
+
+### Get Free Shipping Threshold
+
+**Endpoint**: `GET /business-settings/free-shipping-threshold`
+
+**Authentication**: Required (JWT Bearer token)
+
+Returns the subtotal threshold for free shipping. A value of `0` disables the rule.
+
+### Update Free Shipping Threshold
+
+**Endpoint**: `PUT /business-settings/free-shipping-threshold`
+
+**Authentication**: Required (admin JWT Bearer token)
+
+**Request Body**:
+```json
+{
+    "freeShippingThreshold": 100
+}
+```
+
+The change is applied to all existing cart orders by the database migration triggers. Cart shipping is free when the pre-discount item subtotal is greater than or equal to the threshold.
+
+---
+
 ## Auth Endpoints
 
 ### Google OAuth Login

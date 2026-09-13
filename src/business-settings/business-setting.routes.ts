@@ -8,7 +8,7 @@ import {UserService} from "../user/user.service";
 import {User} from "../user/user.entity";
 import {checkAdminMiddleware} from "../middlewares/check-admin.middleware";
 import {handleValidationErrors} from "../order/order.validators";
-import {updateShippingCostValidators} from "./business-setting.validators";
+import {updateFreeShippingThresholdValidators, updateShippingCostValidators} from "./business-setting.validators";
 
 const businessSettingService = new BusinessSettingService(AppDataSource.getRepository(BusinessSetting));
 const businessSettingController = new BusinessSettingController(businessSettingService);
@@ -19,5 +19,7 @@ const adminOnly = [authorize, checkAdminMiddleware];
 
 router.get("/shipping-cost", authorize, businessSettingController.getShippingCost);
 router.put("/shipping-cost", ...updateShippingCostValidators, handleValidationErrors, ...adminOnly, businessSettingController.updateShippingCost);
+router.get("/free-shipping-threshold", authorize, businessSettingController.getFreeShippingThreshold);
+router.put("/free-shipping-threshold", ...updateFreeShippingThresholdValidators, handleValidationErrors, ...adminOnly, businessSettingController.updateFreeShippingThreshold);
 
 export default router;

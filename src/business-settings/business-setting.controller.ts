@@ -37,4 +37,23 @@ export class BusinessSettingController {
             });
         }
     };
+
+    getFreeShippingThreshold = async (_req: Request, res: Response): Promise<void> => {
+        try {
+            const value = await this.businessSettingService.getFreeShippingThreshold();
+            res.status(200).json({ success: true, message: "Free shipping threshold retrieved successfully", data: { key: "freeShippingThreshold", value } });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Unknown error" });
+        }
+    };
+
+    updateFreeShippingThreshold = async (req: Request, res: Response): Promise<void> => {
+        try {
+            const value = req.body?.freeShippingThreshold ?? req.body?.value;
+            const setting = await this.businessSettingService.setFreeShippingThreshold(value);
+            res.status(200).json({ success: true, message: "Free shipping threshold updated successfully", data: { key: setting.key, value: Number(setting.value.toString()) } });
+        } catch (error) {
+            res.status(400).json({ success: false, message: error instanceof Error ? error.message : "Unknown error" });
+        }
+    };
 }

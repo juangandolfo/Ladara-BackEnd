@@ -127,3 +127,38 @@ test('active cart refreshes shipping while completion keeps the cart snapshot', 
   assert.equal(completed?.shippingCost, 8);
   assert.equal(completed?.status, OrderStatus.COMPLETED);
 });
+
+test('setting an item quantity to zero returns the removed item as a successful update', async () => {
+  const item = {
+    id: 7,
+    quantity: 1,
+    price: 12,
+    product: { id: 4 },
+    order: {
+      id: 9,
+      status: OrderStatus.CART,
+      user: { id: 'user-1' },
+      items: [],
+      shippingCost: 8,
+    },
+  } as any;
+  const itemRepo: any = {
+    findOne: async () => item,
+    delete: async () => undefined,
+    save: async (entity: any) => entity,
+  };
+  const orderRepo: any = {
+    save: async (entity: any) => entity,
+  };
+  const service = new OrderService(
+    orderRepo,
+    itemRepo,
+    {} as any,
+    {} as any,
+    { listDiscountsByUser: async () => [] } as any,
+  );
+
+  const removedItem = await service.updateItemQuantity(7, 0);
+
+  assert.equal(removedItem, item);
+});
