@@ -185,8 +185,24 @@ Mark order as completed (admin only).
 **Logic**:
 1. Find order
 2. Set status to COMPLETED
-3. Create new CART for user
-4. Save
+3. Save
+4. Send the cart and billing information to `ADMIN_EMAIL`
+
+The completion request accepts the billing form in its body:
+
+```json
+{
+    "billing": {
+        "firstName": "Ada",
+        "lastName": "Lovelace",
+        "email": "ada@example.com",
+        "address": "1 Example Street",
+        "city": "London",
+        "postalCode": "NW1 1AA",
+        "country": "United Kingdom"
+    }
+}
+```
 
 ---
 

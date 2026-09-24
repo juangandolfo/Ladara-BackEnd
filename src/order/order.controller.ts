@@ -14,6 +14,7 @@ import {
 } from "../dtos/order.dto";
 import {DiscountService} from "../discount/discount.service";
 import {BusinessSettingService} from "../business-settings/business-setting.service";
+import {EmailService, BillingDetails} from "../email/email.service";
 
 export class OrderController {
     private orderService: OrderService;
@@ -24,7 +25,8 @@ export class OrderController {
         productRepo: Repository<Product>,
         userRepo: Repository<User>,
         private discountService: DiscountService,
-        businessSettingService?: BusinessSettingService
+        businessSettingService?: BusinessSettingService,
+        private emailService: EmailService = new EmailService()
     ) {
         this.orderService = new OrderService(orderRepo, itemRepo, productRepo, userRepo, discountService, businessSettingService);
     }
@@ -134,7 +136,7 @@ export class OrderController {
         }
     };
 
-    markOrderCompleted = async (req: Request, res: Response): Promise<void> => {
+    markOrderCompleted = async (req: Request< { id: string }, unknown, { billing?: BillingDetails }>, res: Response): Promise<void> => {
         try {
             const orderId = Number(req.params.id);
             const order = await this.orderService.markOrderCompleted(orderId);
@@ -142,6 +144,7 @@ export class OrderController {
                 res.status(404).json({success: false, message: "Order not found"});
                 return;
             }
+            await this.emailService.sendOrderConfirmation(order, req.body?.billing || {});
             const orderDto = this.transformOrderToDto(order);
             res.status(200).json({success: true, message: "Order completed successfully", data: orderDto});
         } catch (error) {

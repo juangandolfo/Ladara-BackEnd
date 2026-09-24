@@ -105,6 +105,35 @@ DB_NAME=ladara_prod
   }
   ```
 
+### Email Configuration
+
+The order completion endpoint sends the cart and billing information to the system administrator.
+
+### `ADMIN_EMAIL`
+- **Required**: Yes when completing orders
+- **Purpose**: Recipient of order confirmation emails
+
+### `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_SECURE`
+- **Required**: Yes when completing orders
+- **Purpose**: SMTP connection settings
+- **Defaults**: `SMTP_PORT=587`, `SMTP_SECURE=false`
+
+### `SMTP_FROM`
+- **Required**: No when `SMTP_USER` is set
+- **Purpose**: Sender address for order confirmation emails
+
+Example:
+
+```env
+ADMIN_EMAIL=admin@example.com
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=mailer@example.com
+SMTP_PASSWORD=change-me
+SMTP_SECURE=false
+SMTP_FROM=mailer@example.com
+```
+
 ### Full Server Example
 
 ```env
