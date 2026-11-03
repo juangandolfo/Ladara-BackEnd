@@ -86,6 +86,15 @@ export class OrderController {
         }
     }
 
+    getAdminDashboardSummary = async (_req: Request, res: Response): Promise<void> => {
+        try {
+            const summary = await this.orderService.getAdminDashboardSummary();
+            res.status(200).json({success: true, data: summary});
+        } catch (error) {
+            res.status(500).json({success: false, message: error instanceof Error ? error.message : "Unknown error"});
+        }
+    };
+
     updateItemQuantityInOrder = async (req: Request<{ itemId: string }>, res: Response): Promise<void> => {
         try {
             const itemId = Number(req.params.itemId);

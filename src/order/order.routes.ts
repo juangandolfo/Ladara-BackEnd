@@ -54,6 +54,7 @@ router.get("/recommendations", orderController.getRecommendations);
 router.get("/current", authorize, orderController.getCurrentOrder);
 router.delete("/current/items", authorizeCartClear, orderController.clearCurrentCart);
 
+router.get("/admin/dashboard-summary", ...authorizeAndCheckAdmin, orderController.getAdminDashboardSummary);
 router.get("/", authorize, orderController.getOrdersByUser);
 router.post("/coupons/validate", authorize, orderController.validateCoupon);
 router.post("/:id/checkout", ...orderIdParamValidator, ...checkoutOrderValidators, handleValidationErrors, ...authorizeAndCheckOwner, orderController.initiateCheckout);

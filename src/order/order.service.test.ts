@@ -126,6 +126,41 @@ test('active cart refreshes shipping while completion keeps the cart snapshot', 
 
   assert.equal(completed?.shippingCost, 8);
   assert.equal(completed?.status, OrderStatus.COMPLETED);
+  assert.ok(completed?.completedAt instanceof Date);
+});
+
+test('admin dashboard summary counts payment, preparing, and recently completed orders', async () => {
+  const countOptions: any[] = [];
+  const orderRepo: any = {
+    count: async (options: any) => {
+      countOptions.push(options);
+      return [2, 3, 4][countOptions.length - 1];
+    },
+  };
+  const service = new OrderService(
+    orderRepo,
+    {} as any,
+    {} as any,
+    {} as any,
+    { listDiscountsByUser: async () => [] } as any,
+  );
+
+  const summary = await service.getAdminDashboardSummary();
+
+  assert.deepEqual(summary, {
+    pendingPaymentCount: 2,
+    preparingCount: 3,
+    completedLast30DaysCount: 4,
+  });
+  assert.deepEqual(countOptions[0].where, {status: OrderStatus.PENDING_PAYMENT});
+  assert.deepEqual(countOptions[1].where, {status: OrderStatus.PREPARING});
+  assert.equal(countOptions[2].where.status, OrderStatus.COMPLETED);
+  const completedAtRange = countOptions[2].where.completedAt;
+  assert.equal(completedAtRange.type, 'between');
+  const [from, to] = completedAtRange.value as Date[];
+  assert.ok(to instanceof Date);
+  assert.ok(from instanceof Date);
+  assert.equal(to.getTime() - from.getTime(), 30 * 24 * 60 * 60 * 1000);
 });
 
 test('setting an item quantity to zero returns the removed item as a successful update', async () => {

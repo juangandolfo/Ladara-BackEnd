@@ -1,4 +1,4 @@
-import {Repository} from "typeorm";
+import {Between, Repository} from "typeorm";
 import {BillingAddress, Order} from "./entities/order.entity";
 import {OrderItem} from "./entities/order-item.entity";
 import {Product} from "../product/product.entity";
@@ -367,6 +367,27 @@ export class OrderService {
         return orders;
     }
 
+    async getAdminDashboardSummary(): Promise<{
+        pendingPaymentCount: number;
+        preparingCount: number;
+        completedLast30DaysCount: number;
+    }> {
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const [pendingPaymentCount, preparingCount, completedLast30DaysCount] = await Promise.all([
+            this.orderRepo.count({where: {status: OrderStatus.PENDING_PAYMENT}}),
+            this.orderRepo.count({where: {status: OrderStatus.PREPARING}}),
+            this.orderRepo.count({
+                where: {
+                    status: OrderStatus.COMPLETED,
+                    completedAt: Between(thirtyDaysAgo, now),
+                },
+            }),
+        ]);
+
+        return {pendingPaymentCount, preparingCount, completedLast30DaysCount};
+    }
+
     async applyDiscountsToPrice(productId: number, originalPrice: number, user: User): Promise<number | null> {
         const discounts = await this.discountService.listDiscountsByUser(user.id);
 
@@ -474,6 +495,9 @@ export class OrderService {
             relations: ["items", "items.product", "user"],
         });
         if (!order) return null;
+        if (order.status !== OrderStatus.COMPLETED) {
+            order.completedAt = new Date();
+        }
         order.status = OrderStatus.COMPLETED;
         order.total = await this.calculateOrderTotal(order);
         return this.orderRepo.save(order);

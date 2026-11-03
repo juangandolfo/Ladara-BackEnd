@@ -40,6 +40,9 @@ export class Order {
     @Column({ type: "datetime", nullable: true })
     checkoutAt: Date | null;
 
+    @Column({ type: "datetime", nullable: true })
+    completedAt: Date | null;
+
     @OneToMany(() => OrderItem, item => item.order, { cascade: true })
     items: OrderItem[];
 
