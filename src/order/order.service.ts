@@ -1,11 +1,27 @@
 import {Repository} from "typeorm";
-import {Order} from "./entities/order.entity";
+import {BillingAddress, Order} from "./entities/order.entity";
 import {OrderItem} from "./entities/order-item.entity";
 import {Product} from "../product/product.entity";
 import {User} from "../user/user.entity";
 import {DiscountService} from "../discount/discount.service";
 import {OrderStatus} from "./types/order-status.type";
 import {BusinessSettingService} from "../business-settings/business-setting.service";
+
+export type CartItemInput = {
+    id?: number | string;
+    cart_item_id?: number | string;
+    product_id?: number | string;
+    productId?: number | string;
+    variant_id?: number | string;
+    variantId?: number | string;
+    seller_id?: number | string;
+    sellerId?: number | string;
+    quantity?: number | string;
+    unit_price?: number | string;
+    price?: number | string;
+    subtotal?: number | string;
+    [key: string]: any;
+};
 
 export class OrderService {
     private readonly orderRepo: Repository<Order>;
@@ -26,6 +42,256 @@ export class OrderService {
         const normalizedTax = Number(taxAmount.toFixed(2));
         const normalizedShipping = Number(Math.max(0, shippingCost).toFixed(2));
         return Number((normalizedSubtotal - normalizedDiscount + normalizedTax + normalizedShipping).toFixed(2));
+    }
+
+    static getCartItemKey(item: CartItemInput): string {
+        const productId = item.product_id ?? item.productId;
+        const variantId = item.variant_id ?? item.variantId ?? "";
+        const sellerId = item.seller_id ?? item.sellerId;
+
+        if (productId === undefined || productId === null || productId === "") {
+            throw new Error("product_id is required");
+        }
+        if (sellerId === undefined || sellerId === null || sellerId === "") {
+            throw new Error("seller_id is required");
+        }
+
+        return `${productId}|${variantId}|${sellerId}`;
+    }
+
+    static validateCartItemPayload(item: CartItemInput): CartItemInput {
+        if (!item || typeof item !== "object") {
+            throw new Error("Cart item payload is required");
+        }
+
+        const productId = item.product_id ?? item.productId;
+        const sellerId = item.seller_id ?? item.sellerId;
+        const quantity = Number(String(item.quantity ?? "").trim());
+        const unitPrice = Number(String(item.unit_price ?? item.price ?? 0).trim());
+
+        if (productId === undefined || productId === null || String(productId).trim() === "") {
+            throw new Error("product_id is required");
+        }
+        if (sellerId === undefined || sellerId === null || String(sellerId).trim() === "") {
+            throw new Error("seller_id is required");
+        }
+        if (!Number.isFinite(quantity) || !Number.isInteger(quantity) || quantity < 1) {
+            throw new Error("quantity must be at least 1; quantity must be a whole number");
+        }
+        if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+            throw new Error("unit_price must be a valid non-negative number");
+        }
+
+        const normalized: CartItemInput = {
+            ...item,
+            product_id: Number(String(productId).trim()),
+            productId: Number(String(productId).trim()),
+            seller_id: String(sellerId).trim(),
+            sellerId: String(sellerId).trim(),
+            quantity: Number(quantity),
+            unit_price: Number(unitPrice.toFixed(2)),
+            price: Number(unitPrice.toFixed(2)),
+            subtotal: Number((Number(quantity) * Number(unitPrice.toFixed(2))).toFixed(2)),
+        };
+
+        if (item.variant_id !== undefined || item.variantId !== undefined) {
+            normalized.variant_id = item.variant_id ?? item.variantId;
+            normalized.variantId = item.variant_id ?? item.variantId;
+        }
+
+        return normalized;
+    }
+
+    static mergeCartItems(guestCartItems: CartItemInput[] = [], authenticatedCartItems: CartItemInput[] = []): CartItemInput[] {
+        const merged = new Map<string, CartItemInput>();
+
+        for (const cartItems of [authenticatedCartItems, guestCartItems]) {
+            for (const item of cartItems) {
+                const normalized = this.validateCartItemPayload(item);
+                const key = this.getCartItemKey(normalized);
+                const existing = merged.get(key);
+
+                if (existing) {
+                    existing.quantity = Number(existing.quantity) + Number(normalized.quantity);
+                    existing.unit_price = existing.unit_price ?? normalized.unit_price;
+                    existing.price = existing.price ?? normalized.unit_price;
+                    existing.subtotal = Number((Number(existing.quantity) * Number(existing.unit_price ?? 0)).toFixed(2));
+                    continue;
+                }
+
+                merged.set(key, {
+                    ...normalized,
+                    subtotal: Number((Number(normalized.quantity) * Number(normalized.unit_price ?? 0)).toFixed(2)),
+                });
+            }
+        }
+
+        return Array.from(merged.values());
+    }
+
+    static upsertCartItem(items: CartItemInput[] = [], incomingItem: CartItemInput): CartItemInput[] {
+        const normalized = this.validateCartItemPayload(incomingItem);
+        const nextItems = (items ?? []).map((item) => this.validateCartItemPayload(item));
+        const key = this.getCartItemKey(normalized);
+
+        const existingIndex = nextItems.findIndex((item) => this.getCartItemKey(item) === key);
+        if (existingIndex >= 0) {
+            const existingItem = nextItems[existingIndex];
+            existingItem.quantity = Number(existingItem.quantity) + Number(normalized.quantity);
+            existingItem.subtotal = Number((Number(existingItem.quantity) * Number(existingItem.unit_price ?? 0)).toFixed(2));
+            return nextItems;
+        }
+
+        const itemToAdd: CartItemInput = {
+            ...normalized,
+            subtotal: Number((Number(normalized.quantity) * Number(normalized.unit_price ?? 0)).toFixed(2)),
+        };
+        nextItems.push(itemToAdd);
+        return nextItems;
+    }
+
+    static buildCartSummary(items: CartItemInput[] = []): { uniqueItemCount: number; totalUnitCount: number; subtotal: number } {
+        const normalized = (items ?? []).map((item) => this.validateCartItemPayload(item));
+        const uniqueKeys = new Set(normalized.map((item) => this.getCartItemKey(item)));
+        const totalUnitCount = normalized.reduce((sum, item) => sum + Number(item.quantity), 0);
+        const subtotal = normalized.reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price ?? item.price ?? 0), 0);
+
+        return {
+            uniqueItemCount: uniqueKeys.size,
+            totalUnitCount,
+            subtotal: Number(subtotal.toFixed(2)),
+        };
+    }
+
+    static updateCartItemQuantity(items: CartItemInput[] = [], cartItemId: number | string, newQuantity: number, availableStock?: number): { items: CartItemInput[]; warning?: string } {
+        const parsedQuantity = Number(newQuantity);
+        if (!Number.isFinite(parsedQuantity) || !Number.isInteger(parsedQuantity) || parsedQuantity < 0) {
+            throw new Error("quantity must be non-negative; quantity must be a whole number");
+        }
+
+        const nextItems = (items ?? []).map((item) => this.validateCartItemPayload(item));
+        const targetIndex = nextItems.findIndex((item) => String(item.id ?? item.cart_item_id) === String(cartItemId));
+
+        if (targetIndex < 0) {
+            return { items: nextItems };
+        }
+
+        if (parsedQuantity === 0) {
+            nextItems.splice(targetIndex, 1);
+            return { items: nextItems };
+        }
+
+        let finalQuantity = parsedQuantity;
+        let warning: string | undefined;
+        if (typeof availableStock === "number" && Number.isFinite(availableStock) && finalQuantity > availableStock) {
+            finalQuantity = Number(availableStock);
+            warning = "Maximum available stock reached";
+        }
+
+        nextItems[targetIndex].quantity = finalQuantity;
+        nextItems[targetIndex].subtotal = Number((finalQuantity * Number(nextItems[targetIndex].unit_price ?? nextItems[targetIndex].price ?? 0)).toFixed(2));
+
+        return { items: nextItems, warning };
+    }
+
+    static removeCartItem(items: CartItemInput[] = [], cartItemId: number | string): CartItemInput[] {
+        return (items ?? []).filter((item) => String(item.id ?? item.cart_item_id) !== String(cartItemId));
+    }
+
+    static applyPromoToCart(
+        promoCode: string,
+        subtotal: number,
+        promo: {
+            code?: string;
+            discountType?: string;
+            value?: number;
+            expiresAt?: string | Date;
+            minimumSpend?: number;
+            active?: boolean;
+        } = {},
+    ): { discountAmount: number; description: string } {
+        const normalizedCode = String(promoCode ?? "").trim();
+        const definition = { ...promo, code: promo.code ?? normalizedCode };
+        const resolvedCode = String(definition.code ?? "").trim().toUpperCase();
+
+        if (!normalizedCode || !resolvedCode || normalizedCode.toUpperCase() !== resolvedCode) {
+            throw new Error("The promotional code you entered is invalid or expired");
+        }
+
+        if (definition.active === false) {
+            throw new Error("The promotional code you entered is invalid or expired");
+        }
+
+        const expiry = definition.expiresAt ? new Date(definition.expiresAt) : null;
+        if (expiry && Number.isNaN(expiry.getTime())) {
+            throw new Error("The promotional code you entered is invalid or expired");
+        }
+        if (expiry && expiry.getTime() < Date.now()) {
+            throw new Error("The promotional code you entered is invalid or expired");
+        }
+
+        const minimumSpend = Number(definition.minimumSpend ?? 0);
+        if (Number(subtotal) < minimumSpend) {
+            throw new Error("The promotional code you entered is invalid or expired");
+        }
+
+        const discountType = String(definition.discountType ?? "percent").toLowerCase();
+        const discountValue = Number(definition.value ?? 0);
+
+        if (!Number.isFinite(discountValue) || discountValue <= 0) {
+            throw new Error("The promotional code you entered is invalid or expired");
+        }
+
+        let discountAmount = 0;
+        if (discountType === "percent") {
+            discountAmount = Number(((Number(subtotal) * discountValue) / 100).toFixed(2));
+        } else if (discountType === "fixed") {
+            discountAmount = Number(Math.min(Number(subtotal), discountValue).toFixed(2));
+        } else {
+            throw new Error("The promotional code you entered is invalid or expired");
+        }
+
+        return {
+            discountAmount,
+            description: `${resolvedCode} - ${discountType === "percent" ? `${discountValue}% off` : `$${discountValue.toFixed(2)} off`}`,
+        };
+    }
+
+    static validateCheckout(
+        items: CartItemInput[] = [],
+        catalog: Record<string | number, { price?: number; stock?: number; restricted?: boolean }> = {},
+    ): { ok: boolean; conflicts: Array<{ cart_item_id: number | string; message: string }> } {
+        const conflicts: Array<{ cart_item_id: number | string; message: string }> = [];
+
+        for (const item of items) {
+            const normalized = this.validateCartItemPayload(item);
+            const productId = Number(normalized.product_id ?? normalized.productId);
+            const catalogEntry = catalog[productId] ?? catalog[String(productId)];
+
+            if (!catalogEntry) {
+                conflicts.push({ cart_item_id: normalized.cart_item_id ?? normalized.id ?? productId, message: `Product ${productId} is unavailable` });
+                continue;
+            }
+
+            const requestedQuantity = Number(normalized.quantity ?? 0);
+            const stock = Number(catalogEntry.stock ?? 0);
+            const price = Number(catalogEntry.price ?? 0);
+
+            if (requestedQuantity > stock) {
+                conflicts.push({ cart_item_id: normalized.cart_item_id ?? normalized.id ?? productId, message: `Product ${productId} exceeds available stock` });
+            }
+            if (price !== Number(normalized.unit_price ?? normalized.price ?? 0)) {
+                conflicts.push({ cart_item_id: normalized.cart_item_id ?? normalized.id ?? productId, message: `Price mismatch for product ${productId}` });
+            }
+            if (catalogEntry.restricted) {
+                conflicts.push({ cart_item_id: normalized.cart_item_id ?? normalized.id ?? productId, message: `Product ${productId} is restricted for checkout` });
+            }
+        }
+
+        return {
+            ok: conflicts.length === 0,
+            conflicts,
+        };
     }
 
     async createOrder(userId: string): Promise<Order> {
@@ -64,6 +330,19 @@ export class OrderService {
         }
 
         return orders;
+    }
+
+    async clearCurrentCart(userId: string): Promise<void> {
+        const order = await this.orderRepo.findOne({
+            where: {user: {id: userId}, status: OrderStatus.CART},
+            relations: ["items", "items.product", "user"],
+        });
+        if (!order) return;
+
+        await this.itemRepo.delete({orderId: order.id});
+        order.items = [];
+        order.total = await this.calculateOrderTotal(order);
+        await this.orderRepo.save(order);
     }
 
     async getOrdersByUser(userId: string): Promise<Order[]> {
@@ -196,6 +475,37 @@ export class OrderService {
         });
         if (!order) return null;
         order.status = OrderStatus.COMPLETED;
+        order.total = await this.calculateOrderTotal(order);
+        return this.orderRepo.save(order);
+    }
+
+    async initiateCheckout(orderId: number, userId: string, billingAddress: BillingAddress, paymentMethod: string): Promise<Order | null> {
+        const order = await this.orderRepo.findOne({
+            where: {id: orderId, user: {id: userId}},
+            relations: ["items", "items.product", "user"],
+        });
+        if (!order) return null;
+        if (order.status !== OrderStatus.CART) {
+            throw new Error("ORDER_NOT_IN_CART");
+        }
+        if (!order.items?.length) {
+            throw new Error("ORDER_EMPTY");
+        }
+
+        // Store only address data and the payment-method identifier; never persist payment credentials.
+        order.billingAddress = {
+            fullName: billingAddress.fullName.trim(),
+            addressLine1: billingAddress.addressLine1.trim(),
+            ...(billingAddress.addressLine2 ? {addressLine2: billingAddress.addressLine2.trim()} : {}),
+            city: billingAddress.city.trim(),
+            ...(billingAddress.state ? {state: billingAddress.state.trim()} : {}),
+            postalCode: billingAddress.postalCode.trim(),
+            country: billingAddress.country.trim(),
+            ...(billingAddress.phone ? {phone: billingAddress.phone.trim()} : {}),
+        };
+        order.paymentMethod = paymentMethod.trim();
+        order.checkoutAt = new Date();
+        order.status = OrderStatus.PENDING_PAYMENT;
         order.total = await this.calculateOrderTotal(order);
         return this.orderRepo.save(order);
     }

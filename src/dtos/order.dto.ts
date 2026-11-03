@@ -13,11 +13,30 @@ export interface OrderItemDto {
     id: number;
     name: string;
     price: number;
-    discountedPrice: number;
+    stock: number;
+    discountedPrice?: number;
     image: string;
     category: string;
     description?: string;
   };
+}
+
+export interface CouponValidationData {
+  valid: boolean;
+  code: string;
+  discountAmount: number;
+  message?: string;
+}
+
+export interface CheckoutValidationRejectedItem {
+  itemId: number | string;
+  reason: string;
+  message: string;
+}
+
+export interface CheckoutValidationData {
+  valid: boolean;
+  rejectedItems: CheckoutValidationRejectedItem[];
 }
 
 export interface OrderDto {
@@ -28,6 +47,18 @@ export interface OrderDto {
   shippingCost: number;
   createdAt: string;
   updatedAt: string;
+  billingAddress?: {
+    fullName: string;
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    state?: string;
+    postalCode: string;
+    country: string;
+    phone?: string;
+  };
+  paymentMethod?: string;
+  checkoutAt?: string;
   items?: OrderItemDto[];
 }
 
@@ -36,6 +67,8 @@ export interface GetOrderResponse extends ApiResponse<OrderDto> {}
 export interface GetCurrentOrderResponse extends ApiResponse<OrderDto[]> {}
 export interface CancelOrderResponse extends ApiResponse<OrderDto> {}
 export interface AddItemResponse extends ApiResponse<OrderItemDto> {}
+export interface CouponValidationResponse extends ApiResponse<CouponValidationData> {}
+export interface CheckoutValidationResponse extends ApiResponse<CheckoutValidationData> {}
 export interface DeleteItemResponse extends ApiResponse<never> {
   message: string;
 }

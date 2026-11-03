@@ -26,6 +26,22 @@ export const updateItemQuantityValidators = [
         .notEmpty().withMessage("Quantity is required"),
 ];
 
+export const checkoutOrderValidators = [
+    body("billingAddress").isObject({ strict: true }).withMessage("Billing address is required"),
+    body("billingAddress.fullName").isString().trim().notEmpty().withMessage("Billing full name is required"),
+    body("billingAddress.addressLine1").isString().trim().notEmpty().withMessage("Billing address line 1 is required"),
+    body("billingAddress.city").isString().trim().notEmpty().withMessage("Billing city is required"),
+    body("billingAddress.postalCode").isString().trim().notEmpty().withMessage("Billing postal code is required"),
+    body("billingAddress.country").isString().trim().notEmpty().withMessage("Billing country is required"),
+    body("billingAddress.addressLine2").optional().isString().trim(),
+    body("billingAddress.state").optional().isString().trim(),
+    body("billingAddress.phone").optional().isString().trim(),
+    body("paymentMethod")
+        .isString().trim().notEmpty().isLength({ max: 50 })
+        .matches(/^[a-zA-Z0-9_-]+$/)
+        .withMessage("Payment method must be a short identifier (do not send card details)"),
+];
+
 export function handleValidationErrors(req: Request, res: Response, next: NextFunction) {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

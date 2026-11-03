@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Order module manages shopping carts and order processing. It handles cart creation, item management, order status tracking, and discount application. Orders can exist in multiple states: CART (active shopping), PREPARING, and COMPLETED.
+The Order module manages shopping carts and order processing. It handles cart creation, item management, order status tracking, and discount application. Orders can exist in these states: CART (active shopping), PENDING_PAYMENT (checkout submitted and awaiting payment confirmation), PREPARING, and COMPLETED.
 
 ## Files
 
@@ -46,6 +46,7 @@ The Order module manages shopping carts and order processing. It handles cart cr
 ```typescript
 enum OrderStatus {
     CART = 'cart',           // Active shopping cart
+    PENDING_PAYMENT = 'pending_payment', // Checkout submitted; awaiting payment confirmation
     PREPARING = 'preparing', // Order being prepared
     COMPLETED = 'completed'  // Order completed
 }
@@ -513,6 +514,14 @@ DELETE /orders/items/:itemId
 POST /orders/:cartId/complete
 → Mark order as COMPLETED
 → Create new CART for user
+```
+
+### Customer Checkout
+```
+POST /orders/:id/checkout
+→ Save billing address, payment-method identifier, and checkout timestamp
+→ Change status from CART to PENDING_PAYMENT
+→ Await payment confirmation (payment is not processed by this endpoint)
 ```
 
 ---

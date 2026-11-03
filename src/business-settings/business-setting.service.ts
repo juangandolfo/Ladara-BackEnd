@@ -11,11 +11,12 @@ export class BusinessSettingService {
     }
 
     static normalizeShippingCost(value: string | number): number {
-        if (value === null || value === undefined || value === "") {
+        const rawValue = typeof value === "string" ? value.trim() : value;
+        if (rawValue === null || rawValue === undefined || rawValue === "") {
             throw new Error("Shipping cost is required");
         }
 
-        const parsed = typeof value === "string" ? Number(value) : Number(value);
+        const parsed = Number(rawValue);
         if (!Number.isFinite(parsed) || parsed < 0) {
             throw new Error("Shipping cost must be a non-negative decimal value");
         }
@@ -29,11 +30,12 @@ export class BusinessSettingService {
     }
 
     static normalizeFreeShippingThreshold(value: string | number): number {
-        if (value === null || value === undefined || value === "") {
+        const rawValue = typeof value === "string" ? value.trim() : value;
+        if (rawValue === null || rawValue === undefined || rawValue === "") {
             throw new Error("Free shipping threshold is required");
         }
 
-        const parsed = Number(value);
+        const parsed = Number(rawValue);
         if (!Number.isFinite(parsed) || parsed < 0) {
             throw new Error("Free shipping threshold must be a non-negative decimal value");
         }

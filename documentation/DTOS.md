@@ -282,7 +282,7 @@ export interface OrderDto {
 **Fields**:
 - `id` - Order ID
 - `userId` - User ID
-- `status` - Order status (cart, preparing, completed)
+- `status` - Order status (cart, pending_payment, preparing, completed)
 - `total` - Total order amount
 - `createdAt` - Creation timestamp
 - `updatedAt` - Last update timestamp
@@ -425,7 +425,7 @@ export interface OrderItemDto {
 export interface OrderDto {
     id: number;
     userId: string;
-    status: 'cart' | 'preparing' | 'completed';
+    status: 'cart' | 'pending_payment' | 'preparing' | 'completed';
     total: number;
     createdAt: string;
     updatedAt: string;

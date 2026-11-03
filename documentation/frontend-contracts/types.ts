@@ -1,4 +1,4 @@
-export enum OrderStatus { CART = 'cart', PREPARING = 'preparing', COMPLETED = 'completed' }
+export enum OrderStatus { CART = 'cart', PENDING_PAYMENT = 'pending_payment', PREPARING = 'preparing', COMPLETED = 'completed' }
 export enum DiscountType { FIXED = 'fixed', PERCENT = 'percent' }
 
 export interface User { id: string; name: string; isAdmin: boolean; }

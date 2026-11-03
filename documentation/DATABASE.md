@@ -159,10 +159,9 @@ export class Order {
 
 **Status Values**:
 - `CART` - Shopping cart (active order)
-- `PENDING` - Awaiting payment
-- `CONFIRMED` - Payment confirmed
-- `SHIPPED` - In transit
-- `DELIVERED` - Completed
+- `PENDING_PAYMENT` - Checkout submitted; awaiting payment confirmation
+- `PREPARING` - Order being prepared
+- `COMPLETED` - Order completed
 
 **Purpose**: Customer orders/shopping carts
 

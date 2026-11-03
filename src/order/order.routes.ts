@@ -20,6 +20,7 @@ import {
     itemIdParamValidator,
     addItemToOrderValidators,
     updateItemQuantityValidators,
+    checkoutOrderValidators,
     handleValidationErrors
 } from "./order.validators";
 
@@ -39,18 +40,24 @@ const orderController = new OrderController(
 
 const checkoutController = new CheckoutController();
 
-const authorize = createAuthorizeMiddleware(new UserService(dataSource.getRepository(User)));
+const userService = new UserService(dataSource.getRepository(User));
+const authorize = createAuthorizeMiddleware(userService);
+const authorizeCartClear = createAuthorizeMiddleware(userService, 401);
 const authorizeAndCheckOwner = [authorize, isOrderOwnerMiddleware];
 const authorizeAndCheckAdmin = [authorize, checkAdminMiddleware];
 
 const router = Router();
 
 router.get("/checkout", checkoutController.getCheckoutPage);
+router.get("/recommendations", orderController.getRecommendations);
 
 router.get("/current", authorize, orderController.getCurrentOrder);
+router.delete("/current/items", authorizeCartClear, orderController.clearCurrentCart);
 
 router.get("/", authorize, orderController.getOrdersByUser);
-
+router.post("/coupons/validate", authorize, orderController.validateCoupon);
+router.post("/:id/checkout", ...orderIdParamValidator, ...checkoutOrderValidators, handleValidationErrors, ...authorizeAndCheckOwner, orderController.initiateCheckout);
+router.post("/:id/validate", ...orderIdParamValidator, handleValidationErrors, ...authorizeAndCheckOwner, orderController.validateOrder);
 router.post("/:id/items", ...orderIdParamValidator, ...addItemToOrderValidators, handleValidationErrors, ...authorizeAndCheckOwner, orderController.addItemToOrder);
 
 router.put("/items/:itemId", ...itemIdParamValidator, ...updateItemQuantityValidators, handleValidationErrors, authorize, orderController.updateItemQuantityInOrder);

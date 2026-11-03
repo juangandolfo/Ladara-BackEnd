@@ -79,6 +79,133 @@ A quantity of `0` on the PUT removes the item. The DELETE endpoint decreases qua
 - A valid request with a nonexistent product or order returns `404`.
 - Validation failures return `400` with an `errors` array.
 
+## Frontend Contract Compatibility
+
+The backend now includes the contract expected by the frontend for coupon validation and checkout validation.
+
+### Coupon validation
+
+```http
+POST http://localhost:3000/api/orders/coupons/validate
+Authorization: Bearer <jwt>
+Content-Type: application/json
+
+{ "code": "SAVE5" }
+```
+
+Success:
+
+```json
+{
+  "success": true,
+  "data": {
+    "valid": true,
+    "code": "SAVE5",
+    "discountAmount": 5
+  }
+}
+```
+
+Failure:
+
+```json
+{
+  "success": false,
+  "message": "El cupón no es válido o ha expirado"
+}
+```
+
+### Checkout validation
+
+```http
+POST http://localhost:3000/api/orders/12/validate
+Authorization: Bearer <jwt>
+Content-Type: application/json
+
+{}
+```
+
+Success:
+
+```json
+{
+  "success": true,
+  "data": {
+    "valid": true,
+    "rejectedItems": []
+  }
+}
+```
+
+### Submit checkout details
+
+After the user enters their billing address and chooses a payment method, submit the details against their order:
+
+```http
+POST http://localhost:3000/api/orders/12/checkout
+Authorization: Bearer <jwt>
+Content-Type: application/json
+
+{
+  "billingAddress": {
+    "fullName": "Jane Doe",
+    "addressLine1": "123 Main Street",
+    "city": "Springfield",
+    "postalCode": "62701",
+    "country": "US"
+  },
+  "paymentMethod": "card"
+}
+```
+
+The authenticated user must own the order, and the order must be a non-empty cart. Success returns the order including `id`, `billingAddress`, `paymentMethod`, and `checkoutAt`; its status changes to `pending_payment` while payment confirmation is pending. This records checkout details but does not process or charge the selected payment method. Never send card numbers or CVV to this endpoint.
+
+Failure:
+
+```json
+{
+  "success": false,
+  "data": {
+    "valid": false,
+    "rejectedItems": [
+      {
+        "itemId": 12,
+        "reason": "OUT_OF_STOCK",
+        "message": "Producto sin stock disponible"
+      }
+    ]
+  }
+}
+```
+
+### Empty-cart recommendations
+
+The backend exposes a dedicated recommendation endpoint:
+
+```http
+GET http://localhost:3000/api/orders/recommendations?limit=4
+```
+
+Response shape:
+
+```json
+{
+  "success": true,
+  "message": "Recommended products retrieved successfully",
+  "data": [
+    {
+      "id": 1,
+      "name": "Product name",
+      "price": 19.99,
+      "stock": 15,
+      "image": "https://example.com/image.jpg",
+      "category": "drinks",
+      "description": "Optional description"
+    }
+  ]
+}
+```
+
 ## Frontend Contract Fix
 
 The endpoint builders should produce paths like:

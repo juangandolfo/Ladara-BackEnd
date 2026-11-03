@@ -35,3 +35,14 @@ for (const [name, authorization] of [
     assert.equal(response.status, 403);
   });
 }
+
+test('authorization supports 401 for endpoints that require standard unauthorized status', async () => {
+  const { response, res } = createResponse();
+  const middleware = createAuthorizeMiddleware({ getEntityById: async () => ({ id: 'user-1' }) }, 401);
+
+  await middleware({ headers: {} } as any, res, () => {
+    throw new Error('next should not be called');
+  });
+
+  assert.equal(response.status, 401);
+});

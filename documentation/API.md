@@ -521,6 +521,35 @@ The change is applied to all existing cart orders by the database migration trig
 
 ---
 
+### Proceed to Checkout / Payment
+
+**Endpoint**: `POST /orders/:id/checkout`
+
+**Description**: Save the authenticated customer's billing address, selected payment-method identifier, and checkout timestamp against their order. The order moves from `cart` to `pending_payment` while payment confirmation is pending. This endpoint records checkout details only; it does not charge or process a payment.
+
+**Authentication**: Required (JWT token; the order must belong to the authenticated user)
+
+**Request Body**:
+```json
+{
+    "billingAddress": {
+        "fullName": "Jane Doe",
+        "addressLine1": "123 Main Street",
+        "addressLine2": "Apartment 4",
+        "city": "Springfield",
+        "state": "IL",
+        "postalCode": "62701",
+        "country": "US",
+        "phone": "+15551234567"
+    },
+    "paymentMethod": "card"
+}
+```
+
+The response contains the order ID, saved billing address, payment-method identifier, and `checkoutAt` timestamp. Do not send card numbers, CVV, or other payment credentials.
+
+---
+
 ### Mark Order as Completed
 
 **Endpoint**: `POST /orders/:id/complete`
