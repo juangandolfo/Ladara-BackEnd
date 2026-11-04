@@ -10,8 +10,9 @@ export interface CreateProductDto { name: string; price: number; category: strin
 export interface UpdateProductDto { name?: string; price?: number; description?: string; code?: string; stock?: number; category?: string; image?: string; }
 export interface ProductFilterResult { products: Product[]; total: number; count: number; appliedFilters: ProductFilterDto; }
 export interface OrderItem { id: number; productId: number; quantity: number; price: number; total: number; discountedPrice?: number; product?: { id: number; name: string; price: number; discountedPrice?: number; image: string; category: string; description?: string; }; }
-export interface Order { id: number; userId: string; status: OrderStatus; total: number; createdAt: string; updatedAt?: string; items?: OrderItem[]; }
-export interface OrderDto { id: number; userId: string; status: OrderStatus; total: number; createdAt: string; updatedAt?: string; items?: OrderItem[]; }
+export interface Order { id: number; userId: string; status: OrderStatus; total: number; createdAt: string; updatedAt?: string; billingAddress?: BillingAddress; paymentMethod?: string; checkoutAt?: string; items?: OrderItem[]; }
+export interface OrderDto { id: number; userId: string; status: OrderStatus; total: number; createdAt: string; updatedAt?: string; billingAddress?: BillingAddress; paymentMethod?: string; checkoutAt?: string; items?: OrderItem[]; }
+export interface BillingAddress { fullName: string; company?: string; addressLine1: string; addressLine2?: string; city: string; state?: string; postalCode: string; country: string; phone?: string; }
 export interface AddItemToOrderDto { productId: number; quantity: number; }
 export interface UpdateItemQuantityDto { quantity: number; }
 export interface OrderResponse extends Response<OrderDto> {}

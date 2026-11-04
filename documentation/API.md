@@ -49,7 +49,6 @@ Returns the subtotal threshold for free shipping. A value of `0` disables the ru
 ```json
 {
     "freeShippingThreshold": 100
-}
 ```
 
 The change is applied to all existing cart orders by the database migration triggers. Cart shipping is free when the pre-discount item subtotal is greater than or equal to the threshold.
@@ -61,7 +60,6 @@ The change is applied to all existing cart orders by the database migration trig
 ### Google OAuth Login
 
 **Endpoint**: `GET /auth/google`
-
 **Description**: Initiates Google OAuth 2.0 authentication flow
 
 **Authentication**: None
@@ -432,13 +430,57 @@ The change is applied to all existing cart orders by the database migration trig
 
 **Endpoint**: `GET /orders`
 
-**Description**: Get all orders (cart and completed) for authenticated user
+**Description**: Get orders belonging to the authenticated user. This is not a store-wide/admin order listing.
 
 **Authentication**: Required (JWT token)
 
 **Parameters**: None
 
 **Response**: Array of order objects
+
+---
+
+This endpoint returns only the authenticated user's orders. For the store-wide dashboard, admins should use `GET /orders/admin`.
+
+### Get All Orders for Admin Dashboard
+
+**Endpoint**: `GET /orders/admin`
+
+**Description**: Return all orders across users, including items and product details, sorted newest first. An empty store returns an empty `data` array.
+
+**Authentication**: Required (JWT token with admin role)
+
+**Parameters**: None
+
+**Response**: `{ "success": true, "message": "All orders retrieved successfully", "data": [ ...orders ] }`
+
+---
+
+### Get Admin Dashboard Order Summary
+
+**Endpoint**: `GET /orders/admin/dashboard-summary`
+
+**Full URL (local)**: `http://localhost:3000/api/orders/admin/dashboard-summary`
+
+**Description**: Return store-wide counts for pending-payment orders, preparing orders, and orders completed during the previous 30 days.
+
+**Authentication**: Required (JWT token with admin role)
+
+**Parameters**: None
+
+**Response**:
+```json
+{
+    "success": true,
+    "data": {
+        "pendingPaymentCount": 2,
+        "preparingCount": 5,
+        "completedLast30DaysCount": 12
+    }
+}
+```
+
+The completed count uses `completedAt`, the order's completion timestamp, rather than `createdAt`. Orders completed before `completedAt` was introduced have no reliable historical completion date and are excluded from this count.
 
 ---
 
@@ -534,6 +576,7 @@ The change is applied to all existing cart orders by the database migration trig
 {
     "billingAddress": {
         "fullName": "Jane Doe",
+        "company": "Example, Inc.",
         "addressLine1": "123 Main Street",
         "addressLine2": "Apartment 4",
         "city": "Springfield",
@@ -546,7 +589,7 @@ The change is applied to all existing cart orders by the database migration trig
 }
 ```
 
-The response contains the order ID, saved billing address, payment-method identifier, and `checkoutAt` timestamp. Do not send card numbers, CVV, or other payment credentials.
+`billingAddress.company` is optional and limited to 120 characters. It is persisted as part of the order's billing address. The response contains the order ID, saved billing address, payment-method identifier, and `checkoutAt` timestamp. Do not send card numbers, CVV, or other payment credentials.
 
 ---
 

@@ -49,6 +49,7 @@ export interface OrderDto {
   updatedAt: string;
   billingAddress?: {
     fullName: string;
+    company?: string;
     addressLine1: string;
     addressLine2?: string;
     city: string;

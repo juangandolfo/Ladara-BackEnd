@@ -5,6 +5,7 @@ import {OrderStatus} from "../types/order-status.type";
 
 export interface BillingAddress {
   fullName: string;
+  company?: string;
   addressLine1: string;
   addressLine2?: string;
   city: string;

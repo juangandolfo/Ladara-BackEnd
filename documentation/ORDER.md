@@ -25,6 +25,10 @@ The Order module manages shopping carts and order processing. It handles cart cr
 | `id` | INT | PK, Auto-increment | Order identifier |
 | `user` | UUID | FK to users, NOT NULL | Order owner |
 | `createdAt` | DATETIME | Auto-set | Creation timestamp |
+| `completedAt` | DATETIME | Nullable | Timestamp set when the order is marked completed; used for the last-30-days dashboard metric |
+| `billingAddress` | JSON | Nullable | Checkout billing details, including optional `company` |
+| `paymentMethod` | VARCHAR(50) | Nullable | Payment-method identifier selected during checkout |
+| `checkoutAt` | DATETIME | Nullable | Timestamp when checkout details were saved |
 | `total` | DECIMAL(10,2) | NOT NULL | Order total amount |
 | `items` | Relation | OneToMany, cascade | Order line items |
 | `status` | ENUM | Not null, default: CART | Current order status |
@@ -118,6 +122,21 @@ Get all orders for user (all statuses).
 - user
 
 **Post-Processing**: Applies discounts to all items
+
+---
+
+#### `getAdminDashboardSummary(): Promise<...>`
+
+Return store-wide order counts for the admin dashboard:
+- `pendingPaymentCount`: orders with `pending_payment` status
+- `preparingCount`: orders with `preparing` status
+- `completedLast30DaysCount`: completed orders whose `completedAt` falls within the last 30 days
+
+The endpoint is `GET /orders/admin/dashboard-summary` and requires an authenticated admin. Historical completed orders predating the `completedAt` column cannot be reliably included without a separate trustworthy completion-date source.
+
+#### `getAllOrdersForAdmin(): Promise<Order[]>`
+
+Return all orders across users, with items, product details, and user relation loaded, sorted by `createdAt` descending. It powers `GET /orders/admin`, which requires an authenticated admin. Unlike `GET /orders`, this endpoint is store-wide and returns an empty list when there are no orders.
 
 ---
 
@@ -285,6 +304,16 @@ Handle GET /orders
 **Authentication**: Required (JWT)
 
 **Returns**: All orders for user (cart and completed)
+
+This route is scoped to the authenticated user. Admin dashboards must use `GET /orders/admin` to retrieve orders belonging to all users.
+
+#### `getAllOrdersForAdmin(req: Request, res: Response): Promise<void>`
+
+Handle `GET /orders/admin`.
+
+**Authentication**: Required (JWT, admin only)
+
+**Returns**: All orders across users (newest first), including items and product details. Returns `200` with an empty `data` array if none exist.
 
 ---
 
@@ -523,6 +552,8 @@ POST /orders/:id/checkout
 → Change status from CART to PENDING_PAYMENT
 → Await payment confirmation (payment is not processed by this endpoint)
 ```
+
+The billing address may include the optional `company` field (maximum 120 characters), which is saved with the rest of the checkout address.
 
 ---
 

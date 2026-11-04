@@ -367,6 +367,13 @@ export class OrderService {
         return orders;
     }
 
+    async getAllOrdersForAdmin(): Promise<Order[]> {
+        return this.orderRepo.find({
+            relations: ["items", "items.product", "user"],
+            order: {createdAt: "DESC"},
+        });
+    }
+
     async getAdminDashboardSummary(): Promise<{
         pendingPaymentCount: number;
         preparingCount: number;
@@ -519,6 +526,7 @@ export class OrderService {
         // Store only address data and the payment-method identifier; never persist payment credentials.
         order.billingAddress = {
             fullName: billingAddress.fullName.trim(),
+            ...(billingAddress.company?.trim() ? {company: billingAddress.company.trim()} : {}),
             addressLine1: billingAddress.addressLine1.trim(),
             ...(billingAddress.addressLine2 ? {addressLine2: billingAddress.addressLine2.trim()} : {}),
             city: billingAddress.city.trim(),

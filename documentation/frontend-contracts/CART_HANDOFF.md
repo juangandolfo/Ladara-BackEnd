@@ -149,6 +149,7 @@ Content-Type: application/json
 {
   "billingAddress": {
     "fullName": "Jane Doe",
+    "company": "Example, Inc.",
     "addressLine1": "123 Main Street",
     "city": "Springfield",
     "postalCode": "62701",
@@ -159,6 +160,8 @@ Content-Type: application/json
 ```
 
 The authenticated user must own the order, and the order must be a non-empty cart. Success returns the order including `id`, `billingAddress`, `paymentMethod`, and `checkoutAt`; its status changes to `pending_payment` while payment confirmation is pending. This records checkout details but does not process or charge the selected payment method. Never send card numbers or CVV to this endpoint.
+
+`billingAddress.company` is optional (maximum 120 characters) and is saved with the rest of the billing address.
 
 Failure:
 

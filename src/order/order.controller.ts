@@ -86,6 +86,16 @@ export class OrderController {
         }
     }
 
+    getAllOrdersForAdmin = async (_req: Request, res: Response<GetCurrentOrderResponse>): Promise<void> => {
+        try {
+            const orders = await this.orderService.getAllOrdersForAdmin();
+            const ordersDto = orders.map(order => this.transformOrderToDto(order));
+            res.status(200).json({success: true, message: "All orders retrieved successfully", data: ordersDto});
+        } catch (error) {
+            res.status(500).json({success: false, message: error instanceof Error ? error.message : "Unknown error"});
+        }
+    };
+
     getAdminDashboardSummary = async (_req: Request, res: Response): Promise<void> => {
         try {
             const summary = await this.orderService.getAdminDashboardSummary();

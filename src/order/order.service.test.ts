@@ -84,6 +84,25 @@ test('GET current order returns numeric shippingCost for an empty authenticated 
   assert.equal(order.total, 8);
 });
 
+test('admin order listing retrieves all users’ orders with dashboard relations in newest-first order', async () => {
+  const orders = [{ id: 2 }, { id: 1 }] as any;
+  let findOptions: any;
+  const service = new OrderService(
+    { find: async (options: any) => { findOptions = options; return orders; } } as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    { listDiscountsByUser: async () => [] } as any,
+  );
+
+  assert.deepEqual(await service.getAllOrdersForAdmin(), orders);
+  assert.deepEqual(findOptions, {
+    relations: ['items', 'items.product', 'user'],
+    order: { createdAt: 'DESC' },
+  });
+  assert.equal('where' in findOptions, false);
+});
+
 test('active cart refreshes shipping while completion keeps the cart snapshot', async () => {
   const order = {
     id: 123,
@@ -403,6 +422,7 @@ test('initiateCheckout persists billing details and payment method on the owned 
 
   const checkedOutOrder = await service.initiateCheckout(123, user.id, {
     fullName: ' Jane Doe ',
+    company: ' Example, Inc. ',
     addressLine1: ' 123 Main Street ',
     city: ' Springfield ',
     postalCode: ' 62701 ',
@@ -413,6 +433,7 @@ test('initiateCheckout persists billing details and payment method on the owned 
   assert.equal(checkedOutOrder?.id, 123);
   assert.deepEqual(checkedOutOrder?.billingAddress, {
     fullName: 'Jane Doe',
+    company: 'Example, Inc.',
     addressLine1: '123 Main Street',
     city: 'Springfield',
     postalCode: '62701',

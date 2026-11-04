@@ -33,6 +33,7 @@ export const checkoutOrderValidators = [
     body("billingAddress.city").isString().trim().notEmpty().withMessage("Billing city is required"),
     body("billingAddress.postalCode").isString().trim().notEmpty().withMessage("Billing postal code is required"),
     body("billingAddress.country").isString().trim().notEmpty().withMessage("Billing country is required"),
+    body("billingAddress.company").optional().isString().trim().isLength({max: 120}).withMessage("Billing company must be 120 characters or fewer"),
     body("billingAddress.addressLine2").optional().isString().trim(),
     body("billingAddress.state").optional().isString().trim(),
     body("billingAddress.phone").optional().isString().trim(),
