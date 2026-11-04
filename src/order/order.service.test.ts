@@ -177,7 +177,7 @@ test('active cart refreshes shipping while completion keeps the cart snapshot', 
   assert.equal(order.shippingCost, 8);
 
   businessSettingRepository.findOneBy = async () => ({ value: '12.00' });
-  order.status = OrderStatus.PREPARING;
+  order.status = OrderStatus.ORDER_PLACED;
   const completed = await service.markOrderCompleted(123);
 
   assert.equal(completed?.shippingCost, 8);
@@ -185,7 +185,7 @@ test('active cart refreshes shipping while completion keeps the cart snapshot', 
   assert.ok(completed?.completedAt instanceof Date);
 });
 
-test('admin dashboard summary counts payment, preparing, and recently completed orders', async () => {
+test('admin dashboard summary counts carts, placed orders, and recently completed orders', async () => {
   const countOptions: any[] = [];
   const orderRepo: any = {
     count: async (options: any) => {
@@ -204,12 +204,12 @@ test('admin dashboard summary counts payment, preparing, and recently completed 
   const summary = await service.getAdminDashboardSummary();
 
   assert.deepEqual(summary, {
-    pendingPaymentCount: 2,
-    preparingCount: 3,
+    cartCount: 2,
+    orderPlacedCount: 3,
     completedLast30DaysCount: 4,
   });
-  assert.deepEqual(countOptions[0].where, {status: OrderStatus.PENDING_PAYMENT});
-  assert.deepEqual(countOptions[1].where, {status: OrderStatus.PREPARING});
+  assert.deepEqual(countOptions[0].where, {status: OrderStatus.CART});
+  assert.deepEqual(countOptions[1].where, {status: OrderStatus.ORDER_PLACED});
   assert.equal(countOptions[2].where.status, OrderStatus.COMPLETED);
   const completedAtRange = countOptions[2].where.completedAt;
   assert.equal(completedAtRange.type, 'between');
@@ -478,7 +478,7 @@ test('initiateCheckout persists billing details and payment method on the owned 
   });
   assert.equal(checkedOutOrder?.paymentMethod, 'bank_transfer');
   assert.ok(checkedOutOrder?.checkoutAt instanceof Date);
-  assert.equal(checkedOutOrder?.status, OrderStatus.PENDING_PAYMENT);
+  assert.equal(checkedOutOrder?.status, OrderStatus.ORDER_PLACED);
   assert.equal(checkedOutOrder?.total, 26.6);
 });
 
@@ -499,7 +499,7 @@ test('initiateCheckout rejects empty carts and orders that already left cart sta
   const address = { fullName: 'Jane Doe', addressLine1: '123 Main Street', city: 'Springfield', postalCode: '62701', country: 'US' };
 
   await assert.rejects(service.initiateCheckout(123, 'user-1', address, 'bank_transfer'), { message: 'ORDER_EMPTY' });
-  order.status = OrderStatus.PREPARING;
+  order.status = OrderStatus.ORDER_PLACED;
   order.items = [{ quantity: 1, price: 10, product: { id: 4 } }];
   await assert.rejects(service.initiateCheckout(123, 'user-1', address, 'bank_transfer'), { message: 'ORDER_NOT_IN_CART' });
   await assert.rejects(service.initiateCheckout(123, 'user-1', address, 'card'), { message: 'INVALID_PAYMENT_METHOD' });
@@ -547,7 +547,7 @@ test('admin fulfillment updates are partial and completion requires paid, invoic
   const order = {
     id: 124,
     user: { id: 'user-1' },
-    status: OrderStatus.PREPARING,
+    status: OrderStatus.ORDER_PLACED,
     total: 10,
     paymentStatus: 'unpaid',
     paymentReference: null,
@@ -571,7 +571,7 @@ test('admin fulfillment updates are partial and completion requires paid, invoic
   await service.updateOrderFulfillment(124, { deliveryDocumentIdentifier: 'DEL-124' });
   assert.equal(order.isDelivered, false);
   assert.equal(order.deliveredAt, null);
-  assert.equal(order.status, OrderStatus.PREPARING);
+  assert.equal(order.status, OrderStatus.ORDER_PLACED);
   assert.equal(order.deliveryDocumentIdentifier, 'DEL-124');
 
   await service.updateOrderFulfillment(124, { deliveryDocumentIdentifier: null });
@@ -581,7 +581,7 @@ test('admin fulfillment updates are partial and completion requires paid, invoic
   assert.ok(order.paidAt instanceof Date);
   assert.ok(order.invoiceIssuedAt instanceof Date);
   assert.equal(order.isDelivered, false);
-  assert.equal(order.status, OrderStatus.PREPARING);
+  assert.equal(order.status, OrderStatus.ORDER_PLACED);
 
   await service.updateOrderFulfillment(124, { isDelivered: true });
   assert.ok(order.deliveredAt instanceof Date);
@@ -597,7 +597,7 @@ test('all payment, invoice, and delivery combinations complete only when all thr
     const delivered = Boolean(mask & 4);
     const order = {
       id: 200 + mask,
-      status: OrderStatus.PREPARING,
+      status: OrderStatus.ORDER_PLACED,
       paymentStatus: 'unpaid',
       paidAt: null,
       invoiceIdentifier: null,
@@ -622,7 +622,7 @@ test('all payment, invoice, and delivery combinations complete only when all thr
     }
 
     const complete = paid && invoiced && delivered;
-    assert.equal(order.status, complete ? OrderStatus.COMPLETED : OrderStatus.PREPARING);
+    assert.equal(order.status, complete ? OrderStatus.COMPLETED : OrderStatus.ORDER_PLACED);
     assert.equal(order.paidAt instanceof Date, paid);
     assert.equal(order.invoiceIssuedAt instanceof Date, invoiced);
     assert.equal(order.deliveredAt instanceof Date, delivered);
@@ -633,7 +633,7 @@ test('all payment, invoice, and delivery combinations complete only when all thr
 test('fulfillment timestamps are stable on repeated updates and completion can be revoked', async () => {
   const order = {
     id: 225,
-    status: OrderStatus.PREPARING,
+    status: OrderStatus.ORDER_PLACED,
     paymentStatus: 'unpaid',
     paidAt: null,
     invoiceIdentifier: null,
@@ -665,13 +665,13 @@ test('fulfillment timestamps are stable on repeated updates and completion can b
 
   await service.updateOrderFulfillment(225, { paymentStatus: 'unpaid' });
   assert.equal(order.paidAt, null);
-  assert.equal(order.status, OrderStatus.PREPARING);
+  assert.equal(order.status, OrderStatus.ORDER_PLACED);
   assert.deepEqual(order.completedAt, firstTimestamps[3]);
 });
 
 test('admin completion action rejects orders missing fulfillment requirements', async () => {
   const service = new OrderService(
-    { findOne: async () => ({ id: 125, status: OrderStatus.PREPARING, paymentStatus: 'unpaid', isDelivered: false }) } as any,
+    { findOne: async () => ({ id: 125, status: OrderStatus.ORDER_PLACED, paymentStatus: 'unpaid', isDelivered: false }) } as any,
     {} as any,
     {} as any,
     {} as any,

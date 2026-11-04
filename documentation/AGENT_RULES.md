@@ -539,7 +539,7 @@ grep -i "jwt\|token" documentation/AUTH.md
 
 ### Find order status workflow
 ```bash
-grep -i "status\|CART\|COMPLETED\|PREPARING" documentation/ORDER.md
+grep -i "status\|CART\|ORDER_PLACED\|COMPLETED" documentation/ORDER.md
 grep -i "OrderStatus" documentation/TYPES.md
 ```
 

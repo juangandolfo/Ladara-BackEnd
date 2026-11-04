@@ -462,7 +462,7 @@ This endpoint returns only the authenticated user's orders. For the store-wide d
 
 **Full URL (local)**: `http://localhost:3000/api/orders/admin/dashboard-summary`
 
-**Description**: Return store-wide counts for pending-payment orders, preparing orders, and orders completed during the previous 30 days.
+**Description**: Return store-wide counts for active carts, placed orders with potentially pending fulfillment actions, and orders completed during the previous 30 days.
 
 **Authentication**: Required (JWT token with admin role)
 
@@ -473,8 +473,8 @@ This endpoint returns only the authenticated user's orders. For the store-wide d
 {
     "success": true,
     "data": {
-        "pendingPaymentCount": 2,
-        "preparingCount": 5,
+        "cartCount": 2,
+        "orderPlacedCount": 5,
         "completedLast30DaysCount": 12
     }
 }
@@ -567,7 +567,7 @@ The completed count uses `completedAt`, the order's completion timestamp, rather
 
 **Endpoint**: `POST /orders/:id/checkout`
 
-**Description**: Save the authenticated customer's billing address, selected payment-method identifier, and checkout timestamp against their order. The order moves from `cart` to `pending_payment` while payment confirmation is pending. This endpoint records checkout details only; it does not charge or process a payment.
+**Description**: Save the authenticated customer's billing address, selected payment method, and checkout timestamp. The order moves from `cart` to `order_placed`; payment, invoice, and delivery progress are tracked independently. This endpoint does not charge or process a payment.
 
 **Authentication**: Required (JWT token; the order must belong to the authenticated user)
 
@@ -611,7 +611,7 @@ The completed count uses `completedAt`, the order's completion timestamp, rather
 
 Omitted fields are left unchanged. Optional reference/identifier fields accept `null` to clear the value. `paymentStatus` accepts `unpaid` or `paid`; `paidAt` is set by the server when marked paid and cleared when marked unpaid. `invoiceIssued: true` records issuance without requiring an invoice identifier; setting a non-empty `invoiceIdentifier` also records issuance. `invoiceIssued: false` clears invoice issuance and its identifier. `isDelivered` records delivery independently of `deliveryDocumentIdentifier`; setting a document identifier alone does not mark the order delivered. `paidAt`, `invoiceIssuedAt`, and `deliveredAt` are server-generated and cannot be supplied by clients. No payment credentials are accepted or stored.
 
-When a partial update leaves the order paid, invoiced, and delivered, its status is synchronized to `completed` and `completedAt` is set on the first transition to that state. Removing a prerequisite from a completed order returns its workflow status to `preparing`; `completedAt` remains the timestamp of its first completion.
+When a partial update leaves the order paid, invoiced, and delivered, its status is synchronized to `completed` and `completedAt` is set on the first transition to that state. Removing a prerequisite from a completed order returns its status to `order_placed`; the individual flags show which actions remain. `completedAt` remains the timestamp of its first completion.
 
 **Response**: `200` with the updated order object. All order responses include `paymentStatus`, `paymentReference`, `paidAt`, `invoiceIdentifier`, `invoiceIssuedAt`, `isDelivered`, `deliveredAt`, `deliveryDocumentIdentifier`, and `completedAt`; absent references and timestamps are returned as `null`.
 

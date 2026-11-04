@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Order module manages shopping carts and order processing. It handles cart creation, item management, order status tracking, and discount application. Orders can exist in these states: CART (active shopping), PENDING_PAYMENT (checkout submitted and awaiting payment confirmation), PREPARING, and COMPLETED.
+The Order module manages shopping carts and order processing. It handles cart creation, item management, workflow status tracking, and discount application. Orders have three workflow states: CART (active shopping), ORDER_PLACED (checkout submitted; payment, invoicing, and delivery progress are represented by independent fields), and COMPLETED (all three requirements recorded).
 
 ## Files
 
@@ -37,6 +37,7 @@ The Order module manages shopping carts and order processing. It handles cart cr
 | `deliveredAt` | DATETIME | Nullable | Server-generated timestamp when delivery is marked complete |
 | `deliveryDocumentIdentifier` | VARCHAR(255) | Nullable | Optional delivery document identifier; setting it alone does not mark delivery |
 | `checkoutAt` | DATETIME | Nullable | Timestamp when checkout details were saved |
+| `legacyWorkflowStatus` | ENUM | Nullable, internal only | Pre-consolidation status (`pending_payment` or `preparing`) retained for historical traceability; not returned in API DTOs |
 | `total` | DECIMAL(10,2) | NOT NULL | Order total amount |
 | `items` | Relation | OneToMany, cascade | Order line items |
 | `status` | ENUM | Not null, default: CART | Current order status |
@@ -58,8 +59,7 @@ The Order module manages shopping carts and order processing. It handles cart cr
 ```typescript
 enum OrderStatus {
     CART = 'cart',           // Active shopping cart
-    PENDING_PAYMENT = 'pending_payment', // Checkout submitted; awaiting payment confirmation
-    PREPARING = 'preparing', // Order being prepared
+    ORDER_PLACED = 'order_placed', // Checkout submitted; independent fulfillment actions may remain
     COMPLETED = 'completed'  // Order completed
 }
 ```
@@ -136,8 +136,8 @@ Get all orders for user (all statuses).
 #### `getAdminDashboardSummary(): Promise<...>`
 
 Return store-wide order counts for the admin dashboard:
-- `pendingPaymentCount`: orders with `pending_payment` status
-- `preparingCount`: orders with `preparing` status
+- `cartCount`: orders with `cart` status
+- `orderPlacedCount`: orders with `order_placed` status, regardless of which fulfillment actions remain
 - `completedLast30DaysCount`: completed orders whose `completedAt` falls within the last 30 days
 
 The endpoint is `GET /orders/admin/dashboard-summary` and requires an authenticated admin. Historical completed orders predating the `completedAt` column cannot be reliably included without a separate trustworthy completion-date source.
@@ -513,9 +513,9 @@ router.post("/:id/complete",
    ↓
 5. Discounts applied at checkout
    ↓
-6. Admin marks as PREPARING
-   ↓
-7. Admin marks as COMPLETED
+6. Checkout changes status to ORDER_PLACED; admin records payment, invoice, and delivery independently
+    ↓
+7. Status becomes COMPLETED once all three fulfillment requirements are recorded
    ↓
 8. New CART created for next shopping session
 ```
@@ -582,8 +582,8 @@ POST /orders/:id/complete
 ```
 POST /orders/:id/checkout
 → Save billing address, payment-method identifier, and checkout timestamp
-→ Change status from CART to PENDING_PAYMENT
-→ Await payment confirmation (payment is not processed by this endpoint)
+→ Change status from CART to ORDER_PLACED
+→ Payment, invoice, and delivery are tracked independently in fulfillment fields
 ```
 
 New checkout requests accept only `bank_transfer` or `cash`. Existing historical payment-method values remain readable.

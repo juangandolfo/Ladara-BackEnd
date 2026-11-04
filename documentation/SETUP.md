@@ -81,6 +81,8 @@ npm run migration:run
 
 This applies all pending migrations from the `db/migrations/` directory.
 
+Run migrations before starting code that depends on new columns or enum values. TypeORM `synchronize` is disabled in all environments to avoid destructive schema changes; do not rely on application startup to update the database.
+
 #### (Optional) Seed Database
 
 To populate with sample data:

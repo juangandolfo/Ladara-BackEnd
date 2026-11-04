@@ -88,8 +88,7 @@ const user = req.entity;
 ```typescript
 export enum OrderStatus {
     CART = 'cart',           // Active shopping cart
-    PENDING_PAYMENT = 'pending_payment', // Checkout submitted; awaiting payment confirmation
-    PREPARING = 'preparing', // Order being prepared
+    ORDER_PLACED = 'order_placed', // Checkout submitted; fulfillment actions may remain
     COMPLETED = 'completed'  // Order completed
 }
 ```
@@ -145,7 +144,7 @@ const completed = await orderRepository.find({
 ```typescript
 // Iterate all statuses
 Object.values(OrderStatus).forEach(status => {
-    console.log(status);  // 'cart', 'pending_payment', 'preparing', 'completed'
+    console.log(status);  // 'cart', 'order_placed', 'completed'
 });
 ```
 
@@ -156,8 +155,7 @@ Object.values(OrderStatus).forEach(status => {
 | Enum Member | String Value | Purpose |
 |------------|--------------|---------|
 | `CART` | `'cart'` | Active shopping cart |
-| `PENDING_PAYMENT` | `'pending_payment'` | Checkout submitted; awaiting payment confirmation |
-| `PREPARING` | `'preparing'` | Order being prepared |
+| `ORDER_PLACED` | `'order_placed'` | Checkout submitted; inspect payment, invoice, and delivery fields for pending actions |
 | `COMPLETED` | `'completed'` | Order finished |
 
 ---

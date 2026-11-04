@@ -16,7 +16,9 @@ export const AppDataSource = new DataSource({
     username: process.env.DB_USER || "root",
     password: process.env.DB_PASSWORD || "password",
     database: process.env.DB_NAME || "ladara",
-    synchronize: true,
+    // Schema changes must be applied through migrations. Automatic enum
+    // synchronization can invalidate existing order statuses during deploys.
+    synchronize: false,
     logging: true,
     entities: [Product, User, Order, OrderItem, Discount, BusinessSetting],
     migrations: [`${__dirname}/../db/migrations/*.ts`],

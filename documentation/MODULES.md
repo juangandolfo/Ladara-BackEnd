@@ -131,8 +131,7 @@ order/
 
 **Statuses** (OrderStatus enum):
 - `CART` - Active shopping cart
-- `PENDING_PAYMENT` - Checkout submitted; awaiting payment confirmation
-- `PREPARING` - Order being prepared
+- `ORDER_PLACED` - Checkout submitted; payment, invoice, and delivery actions are tracked independently
 - `COMPLETED` - Order finished
 
 **Responsibilities**:

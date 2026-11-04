@@ -5,7 +5,7 @@
 - **Type**: MySQL 8.0+
 - **ORM**: TypeORM 0.3.25
 - **Connection Pool**: mysql2/promise
-- **Synchronization**: Enabled (auto-creates tables from entities)
+- **Synchronization**: Disabled; schema changes in every environment must use migrations
 - **Logging**: Enabled in development
 
 ## Entity Relationships Diagram
@@ -147,6 +147,9 @@ export class Order {
     })
     status: OrderStatus;
 
+    @Column({ type: "enum", enum: ["pending_payment", "preparing"], nullable: true, select: false })
+    legacyWorkflowStatus: "pending_payment" | "preparing" | null;
+
     @Column({ type: "enum", enum: ["unpaid", "paid"], default: "unpaid" })
     paymentStatus: "unpaid" | "paid";
 
@@ -185,12 +188,12 @@ export class Order {
 - `isDelivered` (BOOLEAN, default false), `deliveredAt` (DATETIME, nullable), and `deliveryDocumentIdentifier` (VARCHAR 255, nullable) - Independent delivery state, timestamp, and optional document identifier
 - `completedAt` (DATETIME, nullable) - Set when payment, invoice issuance, and delivery have all been recorded
 - `items` (Relation) - OrderItem array with cascade delete
-- `status` (ENUM) - Current order status
+- `status` (ENUM) - Current workflow status: `cart`, `order_placed`, or `completed`
+- `legacyWorkflowStatus` (ENUM, nullable, internal) - Original `pending_payment` or `preparing` value retained for migrated historical records; excluded from API responses
 
 **Status Values**:
 - `CART` - Shopping cart (active order)
-- `PENDING_PAYMENT` - Checkout submitted; awaiting payment confirmation
-- `PREPARING` - Order being prepared
+- `ORDER_PLACED` - Checkout submitted; payment, invoice, and delivery tracked independently
 - `COMPLETED` - Order completed
 
 **Purpose**: Customer orders/shopping carts
@@ -202,7 +205,7 @@ export class Order {
 - Independent payment, invoicing, and delivery tracking; document identifiers do not substitute for the corresponding state
 - One cart per user at CART status
 
-Migration `1800000006000-order-fulfillment-states` adds nullable references/timestamps and defaults existing orders to `unpaid` and undelivered without changing historical `paymentMethod` values or order statuses.
+Migration `1800000006000-order-fulfillment-states` adds nullable references/timestamps and defaults existing orders to `unpaid` and undelivered without changing historical `paymentMethod` values or order statuses. Migration `1800000007000-order-placed-status` consolidates `pending_payment` and `preparing` to `order_placed`, retaining each previous value in `legacyWorkflowStatus`; API status values are now `cart`, `order_placed`, and `completed`.
 
 **Relationships**:
 - Many-to-One: User

@@ -1,4 +1,4 @@
-export enum OrderStatus { CART = 'cart', PENDING_PAYMENT = 'pending_payment', PREPARING = 'preparing', COMPLETED = 'completed' }
+export enum OrderStatus { CART = 'cart', ORDER_PLACED = 'order_placed', COMPLETED = 'completed' }
 export type OrderPaymentMethod = 'bank_transfer' | 'cash';
 export type OrderPaymentStatus = 'unpaid' | 'paid';
 export enum DiscountType { FIXED = 'fixed', PERCENT = 'percent' }
@@ -17,12 +17,14 @@ export interface OrderDto extends Order {}
 export interface BillingAddress { fullName: string; company?: string; addressLine1: string; addressLine2?: string; city: string; state?: string; postalCode: string; country: string; phone?: string; }
 export interface CheckoutOrderDto { billingAddress: BillingAddress; paymentMethod: OrderPaymentMethod; }
 export interface OrderFulfillmentUpdateDto { paymentStatus?: OrderPaymentStatus; paymentReference?: string | null; invoiceIssued?: boolean; invoiceIdentifier?: string | null; isDelivered?: boolean; deliveryDocumentIdentifier?: string | null; }
+export interface AdminOrderDashboardSummary { cartCount: number; orderPlacedCount: number; completedLast30DaysCount: number; }
 export interface AddItemToOrderDto { productId: number; quantity: number; }
 export interface UpdateItemQuantityDto { quantity: number; }
 export interface Response<T> { success: boolean; message?: string; data?: T; error?: string; }
 export interface OrderResponse extends Response<OrderDto> {}
 export interface OrderListResponse extends Response<OrderDto[]> {}
 export interface OrderItemResponse extends Response<OrderItem> {}
+export interface AdminOrderDashboardSummaryResponse extends Response<AdminOrderDashboardSummary> {}
 export interface Discount { id: number; userId: string; value: number; type: DiscountType; description?: string; usesLeft?: number | null; deletedAt?: Date | null; }
 export interface CreateDiscountDto { userId: string; value: number; type: DiscountType; description?: string; usesLeft?: number | null; }
 export interface UpdateDiscountDto { value?: number; type?: DiscountType; description?: string; usesLeft?: number | null; }

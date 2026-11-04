@@ -38,6 +38,9 @@ export class Order {
     @Column({ type: "varchar", length: 50, nullable: true })
     paymentMethod: string | null;
 
+    @Column({ type: "enum", enum: ["pending_payment", "preparing"], nullable: true, select: false })
+    legacyWorkflowStatus: "pending_payment" | "preparing" | null;
+
     @Column({ type: "enum", enum: ["unpaid", "paid"], default: "unpaid" })
     paymentStatus: "unpaid" | "paid";
 

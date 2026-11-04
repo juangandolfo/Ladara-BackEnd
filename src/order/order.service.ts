@@ -376,15 +376,15 @@ export class OrderService {
     }
 
     async getAdminDashboardSummary(): Promise<{
-        pendingPaymentCount: number;
-        preparingCount: number;
+        cartCount: number;
+        orderPlacedCount: number;
         completedLast30DaysCount: number;
     }> {
         const now = new Date();
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        const [pendingPaymentCount, preparingCount, completedLast30DaysCount] = await Promise.all([
-            this.orderRepo.count({where: {status: OrderStatus.PENDING_PAYMENT}}),
-            this.orderRepo.count({where: {status: OrderStatus.PREPARING}}),
+        const [cartCount, orderPlacedCount, completedLast30DaysCount] = await Promise.all([
+            this.orderRepo.count({where: {status: OrderStatus.CART}}),
+            this.orderRepo.count({where: {status: OrderStatus.ORDER_PLACED}}),
             this.orderRepo.count({
                 where: {
                     status: OrderStatus.COMPLETED,
@@ -393,7 +393,7 @@ export class OrderService {
             }),
         ]);
 
-        return {pendingPaymentCount, preparingCount, completedLast30DaysCount};
+        return {cartCount, orderPlacedCount, completedLast30DaysCount};
     }
 
     async applyDiscountsToPrice(productId: number, originalPrice: number, user: User): Promise<number | null> {
@@ -586,7 +586,7 @@ export class OrderService {
         };
         order.paymentMethod = normalizedPaymentMethod;
         order.checkoutAt = new Date();
-        order.status = OrderStatus.PENDING_PAYMENT;
+        order.status = OrderStatus.ORDER_PLACED;
         order.total = await this.calculateOrderTotal(order);
         return this.orderRepo.save(order);
     }
@@ -641,7 +641,7 @@ export class OrderService {
                 order.completedAt = order.completedAt ?? new Date();
             }
         } else if (order.status === OrderStatus.COMPLETED) {
-            order.status = OrderStatus.PREPARING;
+            order.status = OrderStatus.ORDER_PLACED;
         }
     }
 }

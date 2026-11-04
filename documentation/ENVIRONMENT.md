@@ -98,6 +98,7 @@ DB_NAME=ladara_prod
 - **Options**: `development`, `staging`, `production`
 - **Default**: (none, should be explicit)
 - **Purpose**: Deployment environment
+- **Database schema**: TypeORM `synchronize` is disabled in all environments; apply schema changes with migrations before starting a new application version.
 - **Usage**:
   ```typescript
   if (process.env.NODE_ENV === 'production') {
