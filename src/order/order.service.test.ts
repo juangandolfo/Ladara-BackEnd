@@ -4,6 +4,8 @@ import { OrderService } from './order.service';
 import { OrderController } from './order.controller';
 import { BusinessSettingService } from '../business-settings/business-setting.service';
 import { OrderStatus } from './types/order-status.type';
+import { validationResult } from 'express-validator';
+import { checkoutOrderValidators, updateOrderFulfillmentValidators } from './order.validators';
 
 test('OrderService.calculateCartTotal adds shipping cost after tax exactly once', () => {
   const total = OrderService.calculateCartTotal(100, 0, 8, 8);
@@ -34,6 +36,14 @@ function createResponse() {
     },
   };
   return { response, res };
+}
+
+async function validateRequest(validators: any[], body: unknown) {
+  const req: any = { body, params: { id: '123' }, query: {}, headers: {} };
+  for (const validator of validators) {
+    await validator.run(req);
+  }
+  return validationResult(req).array();
 }
 
 test('GET current order returns numeric shippingCost for an empty authenticated cart', async () => {
@@ -79,6 +89,27 @@ test('GET current order returns numeric shippingCost for an empty authenticated 
   const body = response.body as any;
   assert.equal(body.data[0].shippingCost, 8);
   assert.equal(typeof body.data[0].shippingCost, 'number');
+  assert.deepEqual({
+    paymentStatus: body.data[0].paymentStatus,
+    paymentReference: body.data[0].paymentReference,
+    paidAt: body.data[0].paidAt,
+    invoiceIdentifier: body.data[0].invoiceIdentifier,
+    invoiceIssuedAt: body.data[0].invoiceIssuedAt,
+    isDelivered: body.data[0].isDelivered,
+    deliveredAt: body.data[0].deliveredAt,
+    deliveryDocumentIdentifier: body.data[0].deliveryDocumentIdentifier,
+    completedAt: body.data[0].completedAt,
+  }, {
+    paymentStatus: 'unpaid',
+    paymentReference: null,
+    paidAt: null,
+    invoiceIdentifier: null,
+    invoiceIssuedAt: null,
+    isDelivered: false,
+    deliveredAt: null,
+    deliveryDocumentIdentifier: null,
+    completedAt: null,
+  });
   assert.deepEqual(body.data[0].items, []);
   assert.equal(order.shippingCost, 8);
   assert.equal(order.total, 8);
@@ -110,6 +141,11 @@ test('active cart refreshes shipping while completion keeps the cart snapshot', 
     status: OrderStatus.CART,
     total: 0,
     shippingCost: '0.00',
+    paymentStatus: 'paid',
+    paidAt: new Date(),
+    invoiceIssuedAt: new Date(),
+    isDelivered: true,
+    deliveredAt: new Date(),
     createdAt: new Date(),
     items: [],
   } as any;
@@ -141,6 +177,7 @@ test('active cart refreshes shipping while completion keeps the cart snapshot', 
   assert.equal(order.shippingCost, 8);
 
   businessSettingRepository.findOneBy = async () => ({ value: '12.00' });
+  order.status = OrderStatus.PREPARING;
   const completed = await service.markOrderCompleted(123);
 
   assert.equal(completed?.shippingCost, 8);
@@ -427,7 +464,7 @@ test('initiateCheckout persists billing details and payment method on the owned 
     city: ' Springfield ',
     postalCode: ' 62701 ',
     country: ' US ',
-  }, ' card ');
+  }, ' bank_transfer ');
 
   assert.deepEqual(lookup.where, { id: 123, user: { id: 'user-1' } });
   assert.equal(checkedOutOrder?.id, 123);
@@ -439,7 +476,7 @@ test('initiateCheckout persists billing details and payment method on the owned 
     postalCode: '62701',
     country: 'US',
   });
-  assert.equal(checkedOutOrder?.paymentMethod, 'card');
+  assert.equal(checkedOutOrder?.paymentMethod, 'bank_transfer');
   assert.ok(checkedOutOrder?.checkoutAt instanceof Date);
   assert.equal(checkedOutOrder?.status, OrderStatus.PENDING_PAYMENT);
   assert.equal(checkedOutOrder?.total, 26.6);
@@ -461,8 +498,204 @@ test('initiateCheckout rejects empty carts and orders that already left cart sta
   );
   const address = { fullName: 'Jane Doe', addressLine1: '123 Main Street', city: 'Springfield', postalCode: '62701', country: 'US' };
 
-  await assert.rejects(service.initiateCheckout(123, 'user-1', address, 'card'), { message: 'ORDER_EMPTY' });
+  await assert.rejects(service.initiateCheckout(123, 'user-1', address, 'bank_transfer'), { message: 'ORDER_EMPTY' });
   order.status = OrderStatus.PREPARING;
   order.items = [{ quantity: 1, price: 10, product: { id: 4 } }];
-  await assert.rejects(service.initiateCheckout(123, 'user-1', address, 'card'), { message: 'ORDER_NOT_IN_CART' });
+  await assert.rejects(service.initiateCheckout(123, 'user-1', address, 'bank_transfer'), { message: 'ORDER_NOT_IN_CART' });
+  await assert.rejects(service.initiateCheckout(123, 'user-1', address, 'card'), { message: 'INVALID_PAYMENT_METHOD' });
+});
+
+test('checkout validator accepts only bank_transfer and cash payment methods', async () => {
+  const validAddress = {
+    fullName: 'Ada Lovelace',
+    addressLine1: '1 Example Street',
+    city: 'London',
+    postalCode: 'N1 1AA',
+    country: 'UK',
+  };
+
+  for (const paymentMethod of ['bank_transfer', 'cash']) {
+    assert.deepEqual(await validateRequest(checkoutOrderValidators, {
+      billingAddress: validAddress,
+      paymentMethod,
+    }), []);
+  }
+
+  const invalidMethodErrors = await validateRequest(checkoutOrderValidators, {
+    billingAddress: validAddress,
+    paymentMethod: 'card',
+  });
+  assert.match(JSON.stringify(invalidMethodErrors), /paymentMethod/);
+});
+
+test('fulfillment validator supports partial updates and rejects empty, unknown, and malformed fields', async () => {
+  assert.deepEqual(await validateRequest(updateOrderFulfillmentValidators, { isDelivered: true }), []);
+  assert.deepEqual(await validateRequest(updateOrderFulfillmentValidators, { paymentReference: null }), []);
+
+  for (const invalidBody of [
+    {},
+    { paidAt: new Date().toISOString() },
+    { isDelivered: 'true' },
+    { paymentStatus: 'processing' },
+    { invoiceIssued: false, invoiceIdentifier: 'INV-1' },
+  ]) {
+    assert.notEqual((await validateRequest(updateOrderFulfillmentValidators, invalidBody)).length, 0);
+  }
+});
+
+test('admin fulfillment updates are partial and completion requires paid, invoiced, and delivered state', async () => {
+  const order = {
+    id: 124,
+    user: { id: 'user-1' },
+    status: OrderStatus.PREPARING,
+    total: 10,
+    paymentStatus: 'unpaid',
+    paymentReference: null,
+    paidAt: null,
+    invoiceIdentifier: null,
+    invoiceIssuedAt: null,
+    isDelivered: false,
+    deliveredAt: null,
+    deliveryDocumentIdentifier: null,
+    completedAt: null,
+    items: [],
+  } as any;
+  const service = new OrderService(
+    { findOne: async () => order, save: async (entity: any) => entity } as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    { listDiscountsByUser: async () => [] } as any,
+  );
+
+  await service.updateOrderFulfillment(124, { deliveryDocumentIdentifier: 'DEL-124' });
+  assert.equal(order.isDelivered, false);
+  assert.equal(order.deliveredAt, null);
+  assert.equal(order.status, OrderStatus.PREPARING);
+  assert.equal(order.deliveryDocumentIdentifier, 'DEL-124');
+
+  await service.updateOrderFulfillment(124, { deliveryDocumentIdentifier: null });
+  assert.equal(order.deliveryDocumentIdentifier, null);
+
+  await service.updateOrderFulfillment(124, { paymentStatus: 'paid', invoiceIdentifier: 'INV-124' });
+  assert.ok(order.paidAt instanceof Date);
+  assert.ok(order.invoiceIssuedAt instanceof Date);
+  assert.equal(order.isDelivered, false);
+  assert.equal(order.status, OrderStatus.PREPARING);
+
+  await service.updateOrderFulfillment(124, { isDelivered: true });
+  assert.ok(order.deliveredAt instanceof Date);
+  assert.equal(order.deliveryDocumentIdentifier, null);
+  assert.equal(order.status, OrderStatus.COMPLETED);
+  assert.ok(order.completedAt instanceof Date);
+});
+
+test('all payment, invoice, and delivery combinations complete only when all three are recorded', async () => {
+  for (let mask = 0; mask < 8; mask += 1) {
+    const paid = Boolean(mask & 1);
+    const invoiced = Boolean(mask & 2);
+    const delivered = Boolean(mask & 4);
+    const order = {
+      id: 200 + mask,
+      status: OrderStatus.PREPARING,
+      paymentStatus: 'unpaid',
+      paidAt: null,
+      invoiceIdentifier: null,
+      invoiceIssuedAt: null,
+      isDelivered: false,
+      deliveredAt: null,
+      completedAt: null,
+    } as any;
+    const service = new OrderService(
+      { findOne: async () => order, save: async (entity: any) => entity } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { listDiscountsByUser: async () => [] } as any,
+    );
+    const update: any = {};
+    if (paid) update.paymentStatus = 'paid';
+    if (invoiced) update.invoiceIssued = true;
+    if (delivered) update.isDelivered = true;
+    if (Object.keys(update).length > 0) {
+      await service.updateOrderFulfillment(order.id, update);
+    }
+
+    const complete = paid && invoiced && delivered;
+    assert.equal(order.status, complete ? OrderStatus.COMPLETED : OrderStatus.PREPARING);
+    assert.equal(order.paidAt instanceof Date, paid);
+    assert.equal(order.invoiceIssuedAt instanceof Date, invoiced);
+    assert.equal(order.deliveredAt instanceof Date, delivered);
+    assert.equal(order.completedAt instanceof Date, complete);
+  }
+});
+
+test('fulfillment timestamps are stable on repeated updates and completion can be revoked', async () => {
+  const order = {
+    id: 225,
+    status: OrderStatus.PREPARING,
+    paymentStatus: 'unpaid',
+    paidAt: null,
+    invoiceIdentifier: null,
+    invoiceIssuedAt: null,
+    isDelivered: false,
+    deliveredAt: null,
+    completedAt: null,
+  } as any;
+  const service = new OrderService(
+    { findOne: async () => order, save: async (entity: any) => entity } as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    { listDiscountsByUser: async () => [] } as any,
+  );
+
+  await service.updateOrderFulfillment(225, {
+    paymentStatus: 'paid',
+    invoiceIssued: true,
+    isDelivered: true,
+  });
+  const firstTimestamps = [order.paidAt, order.invoiceIssuedAt, order.deliveredAt, order.completedAt];
+  await service.updateOrderFulfillment(225, {
+    paymentStatus: 'paid',
+    invoiceIssued: true,
+    isDelivered: true,
+  });
+  assert.deepEqual([order.paidAt, order.invoiceIssuedAt, order.deliveredAt, order.completedAt], firstTimestamps);
+
+  await service.updateOrderFulfillment(225, { paymentStatus: 'unpaid' });
+  assert.equal(order.paidAt, null);
+  assert.equal(order.status, OrderStatus.PREPARING);
+  assert.deepEqual(order.completedAt, firstTimestamps[3]);
+});
+
+test('admin completion action rejects orders missing fulfillment requirements', async () => {
+  const service = new OrderService(
+    { findOne: async () => ({ id: 125, status: OrderStatus.PREPARING, paymentStatus: 'unpaid', isDelivered: false }) } as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    { listDiscountsByUser: async () => [] } as any,
+  );
+
+  await assert.rejects(service.markOrderCompleted(125), { message: 'ORDER_COMPLETION_REQUIREMENTS_NOT_MET' });
+});
+
+test('admin completion controller returns conflict when fulfillment is incomplete', async () => {
+  const controller = new OrderController(
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    { listDiscountsByUser: async () => [] } as any,
+  );
+  (controller as any).orderService.markOrderCompleted = async () => {
+    throw new Error('ORDER_COMPLETION_REQUIREMENTS_NOT_MET');
+  };
+  const { response, res } = createResponse();
+
+  await controller.markOrderCompleted({ params: { id: '125' }, body: {} } as any, res as any);
+
+  assert.equal(response.status, 409);
+  assert.match(response.body.message, /payment, invoice issuance, and delivery/);
 });

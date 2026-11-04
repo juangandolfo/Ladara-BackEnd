@@ -153,6 +153,7 @@ order/
 **Routes**:
 - `GET /orders/current` - Get current cart
 - `GET /orders` - Get all user orders
+- `PATCH /orders/:id/fulfillment` - Partially update fulfillment (admin only)
 - `POST /orders/:id/items` - Add to cart
 - `PUT /orders/items/:itemId` - Update quantity
 - `DELETE /orders/items/:itemId` - Remove item

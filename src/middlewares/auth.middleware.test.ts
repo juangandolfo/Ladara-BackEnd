@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import jwt from 'jsonwebtoken';
 import { createAuthorizeMiddleware } from './auth.middleware';
+import { checkAdminMiddleware } from './check-admin.middleware';
 
 function createResponse() {
   const response: any = {};
@@ -12,6 +13,10 @@ function createResponse() {
     },
     send(message: string) {
       response.message = message;
+      return res;
+    },
+    json(body: unknown) {
+      response.body = body;
       return res;
     },
   };
@@ -45,4 +50,25 @@ test('authorization supports 401 for endpoints that require standard unauthorize
   });
 
   assert.equal(response.status, 401);
+});
+
+test('admin middleware rejects unauthenticated and non-admin users and allows admins', () => {
+  const unauthenticated = createResponse();
+  checkAdminMiddleware({ entity: undefined } as any, unauthenticated.res, () => {
+    throw new Error('next should not be called for unauthenticated users');
+  });
+  assert.equal(unauthenticated.response.status, 401);
+
+  const customer = createResponse();
+  checkAdminMiddleware({ entity: { id: 'user-1', isAdmin: false } } as any, customer.res, () => {
+    throw new Error('next should not be called for non-admin users');
+  });
+  assert.equal(customer.response.status, 403);
+
+  const admin = createResponse();
+  let nextCalled = false;
+  checkAdminMiddleware({ entity: { id: 'admin-1', isAdmin: true } } as any, admin.res, () => {
+    nextCalled = true;
+  });
+  assert.equal(nextCalled, true);
 });

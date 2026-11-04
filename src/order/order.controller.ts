@@ -1,14 +1,16 @@
 import {Request, Response} from "express";
 import {OrderService} from "./order.service";
 import {Repository} from "typeorm";
-import {BillingAddress, Order} from "./entities/order.entity";
+import {Order} from "./entities/order.entity";
 import {OrderItem} from "./entities/order-item.entity";
 import {Product} from "../product/product.entity";
 import {User} from "../user/user.entity";
 import {
     AddItemResponse,
     AddItemToOrderDto,
+    CheckoutOrderDto,
     GetCurrentOrderResponse,
+    OrderFulfillmentUpdateDto,
     OrderDto,
     OrderItemDto
 } from "../dtos/order.dto";
@@ -186,12 +188,33 @@ export class OrderController {
             const orderDto = this.transformOrderToDto(order);
             res.status(200).json({success: true, message: "Order completed successfully", data: orderDto});
         } catch (error) {
+            if (error instanceof Error && error.message === "ORDER_COMPLETION_REQUIREMENTS_NOT_MET") {
+                res.status(409).json({success: false, message: "Order cannot be completed until payment, invoice issuance, and delivery are all recorded"});
+                return;
+            }
+            res.status(500).json({success: false, message: error instanceof Error ? error.message : "Unknown error"});
+        }
+    };
+
+    updateOrderFulfillment = async (
+        req: Request<{ id: string }, unknown, OrderFulfillmentUpdateDto>,
+        res: Response,
+    ): Promise<void> => {
+        try {
+            const order = await this.orderService.updateOrderFulfillment(Number(req.params.id), req.body);
+            if (!order) {
+                res.status(404).json({success: false, message: "Order not found"});
+                return;
+            }
+            const orderDto = this.transformOrderToDto(order);
+            res.status(200).json({success: true, message: "Order fulfillment updated successfully", data: orderDto});
+        } catch (error) {
             res.status(500).json({success: false, message: error instanceof Error ? error.message : "Unknown error"});
         }
     };
 
     initiateCheckout = async (
-        req: Request<{ id: string }, unknown, { billingAddress: BillingAddress; paymentMethod: string }>,
+        req: Request<{ id: string }, unknown, CheckoutOrderDto>,
         res: Response,
     ): Promise<void> => {
         try {
@@ -215,6 +238,10 @@ export class OrderController {
             }
             if (error instanceof Error && error.message === "ORDER_NOT_IN_CART") {
                 res.status(409).json({success: false, message: "Order has already left the cart state"});
+                return;
+            }
+            if (error instanceof Error && error.message === "INVALID_PAYMENT_METHOD") {
+                res.status(400).json({success: false, message: "Payment method must be bank_transfer or cash"});
                 return;
             }
             res.status(500).json({success: false, message: error instanceof Error ? error.message : "Unknown error"});
@@ -334,6 +361,15 @@ export class OrderController {
             billingAddress: order.billingAddress ?? undefined,
             paymentMethod: order.paymentMethod ?? undefined,
             checkoutAt: order.checkoutAt?.toISOString(),
+            paymentStatus: order.paymentStatus ?? "unpaid",
+            paymentReference: order.paymentReference ?? null,
+            paidAt: order.paidAt?.toISOString() ?? null,
+            invoiceIdentifier: order.invoiceIdentifier ?? null,
+            invoiceIssuedAt: order.invoiceIssuedAt?.toISOString() ?? null,
+            isDelivered: Boolean(order.isDelivered),
+            deliveredAt: order.deliveredAt?.toISOString() ?? null,
+            deliveryDocumentIdentifier: order.deliveryDocumentIdentifier ?? null,
+            completedAt: order.completedAt?.toISOString() ?? null,
             items: order.items?.map(item => this.transformOrderItemToDto(item))
         };
     }

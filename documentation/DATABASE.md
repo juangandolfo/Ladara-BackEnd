@@ -146,6 +146,30 @@ export class Order {
         default: OrderStatus.CART
     })
     status: OrderStatus;
+
+    @Column({ type: "enum", enum: ["unpaid", "paid"], default: "unpaid" })
+    paymentStatus: "unpaid" | "paid";
+
+    @Column({ type: "varchar", length: 255, nullable: true })
+    paymentReference: string | null;
+
+    @Column({ type: "datetime", nullable: true })
+    paidAt: Date | null;
+
+    @Column({ type: "varchar", length: 100, nullable: true })
+    invoiceIdentifier: string | null;
+
+    @Column({ type: "datetime", nullable: true })
+    invoiceIssuedAt: Date | null;
+
+    @Column({ type: "boolean", default: false })
+    isDelivered: boolean;
+
+    @Column({ type: "datetime", nullable: true })
+    deliveredAt: Date | null;
+
+    @Column({ type: "varchar", length: 255, nullable: true })
+    deliveryDocumentIdentifier: string | null;
 }
 ```
 
@@ -154,6 +178,12 @@ export class Order {
 - `user` (UUID) - Foreign key to User
 - `createdAt` (DATETIME) - Auto-set creation time
 - `total` (DECIMAL 10,2) - Order total amount
+- `paymentMethod` (VARCHAR 50, nullable) - Method selected during checkout; new checkouts accept `bank_transfer` or `cash`
+- `paymentStatus` (ENUM: `unpaid`, `paid`) - Payment state, independent of order workflow
+- `paymentReference` (VARCHAR 255, nullable) and `paidAt` (DATETIME, nullable) - Optional reference and server-generated payment timestamp
+- `invoiceIdentifier` (VARCHAR 100, nullable) and `invoiceIssuedAt` (DATETIME, nullable) - Optional invoice identifier and issuance timestamp
+- `isDelivered` (BOOLEAN, default false), `deliveredAt` (DATETIME, nullable), and `deliveryDocumentIdentifier` (VARCHAR 255, nullable) - Independent delivery state, timestamp, and optional document identifier
+- `completedAt` (DATETIME, nullable) - Set when payment, invoice issuance, and delivery have all been recorded
 - `items` (Relation) - OrderItem array with cascade delete
 - `status` (ENUM) - Current order status
 
@@ -169,7 +199,10 @@ export class Order {
 - Cascade delete items when order deleted
 - Auto-tracked creation time
 - Status tracking
+- Independent payment, invoicing, and delivery tracking; document identifiers do not substitute for the corresponding state
 - One cart per user at CART status
+
+Migration `1800000006000-order-fulfillment-states` adds nullable references/timestamps and defaults existing orders to `unpaid` and undelivered without changing historical `paymentMethod` values or order statuses.
 
 **Relationships**:
 - Many-to-One: User

@@ -6,6 +6,7 @@ import {User} from "../user/user.entity";
 import {DiscountService} from "../discount/discount.service";
 import {OrderStatus} from "./types/order-status.type";
 import {BusinessSettingService} from "../business-settings/business-setting.service";
+import {OrderFulfillmentUpdateDto} from "../dtos/order.dto";
 
 export type CartItemInput = {
     id?: number | string;
@@ -502,15 +503,63 @@ export class OrderService {
             relations: ["items", "items.product", "user"],
         });
         if (!order) return null;
-        if (order.status !== OrderStatus.COMPLETED) {
-            order.completedAt = new Date();
+        if (!this.hasCompletedFulfillment(order)) {
+            throw new Error("ORDER_COMPLETION_REQUIREMENTS_NOT_MET");
         }
-        order.status = OrderStatus.COMPLETED;
+        this.synchronizeCompletionStatus(order);
         order.total = await this.calculateOrderTotal(order);
         return this.orderRepo.save(order);
     }
 
+    async updateOrderFulfillment(orderId: number, update: OrderFulfillmentUpdateDto): Promise<Order | null> {
+        const order = await this.orderRepo.findOne({
+            where: {id: orderId},
+            relations: ["items", "items.product", "user"],
+        });
+        if (!order) return null;
+
+        const updatedAt = new Date();
+        if (update.paymentStatus !== undefined) {
+            order.paymentStatus = update.paymentStatus;
+            order.paidAt = update.paymentStatus === "paid" ? (order.paidAt ?? updatedAt) : null;
+        }
+        if (update.paymentReference !== undefined) {
+            order.paymentReference = update.paymentReference === null ? null : update.paymentReference.trim();
+        }
+
+        if (update.invoiceIdentifier !== undefined) {
+            order.invoiceIdentifier = update.invoiceIdentifier === null ? null : update.invoiceIdentifier.trim();
+            if (order.invoiceIdentifier && !order.invoiceIssuedAt) {
+                order.invoiceIssuedAt = updatedAt;
+            }
+        }
+        if (update.invoiceIssued !== undefined) {
+            order.invoiceIssuedAt = update.invoiceIssued ? (order.invoiceIssuedAt ?? updatedAt) : null;
+            if (!update.invoiceIssued) {
+                order.invoiceIdentifier = null;
+            }
+        }
+
+        if (update.isDelivered !== undefined) {
+            order.isDelivered = update.isDelivered;
+            order.deliveredAt = update.isDelivered ? (order.deliveredAt ?? updatedAt) : null;
+        }
+        if (update.deliveryDocumentIdentifier !== undefined) {
+            order.deliveryDocumentIdentifier = update.deliveryDocumentIdentifier === null
+                ? null
+                : update.deliveryDocumentIdentifier.trim();
+        }
+
+        this.synchronizeCompletionStatus(order);
+        return this.orderRepo.save(order);
+    }
+
     async initiateCheckout(orderId: number, userId: string, billingAddress: BillingAddress, paymentMethod: string): Promise<Order | null> {
+        const normalizedPaymentMethod = typeof paymentMethod === "string" ? paymentMethod.trim() : "";
+        if (normalizedPaymentMethod !== "bank_transfer" && normalizedPaymentMethod !== "cash") {
+            throw new Error("INVALID_PAYMENT_METHOD");
+        }
+
         const order = await this.orderRepo.findOne({
             where: {id: orderId, user: {id: userId}},
             relations: ["items", "items.product", "user"],
@@ -535,7 +584,7 @@ export class OrderService {
             country: billingAddress.country.trim(),
             ...(billingAddress.phone ? {phone: billingAddress.phone.trim()} : {}),
         };
-        order.paymentMethod = paymentMethod.trim();
+        order.paymentMethod = normalizedPaymentMethod;
         order.checkoutAt = new Date();
         order.status = OrderStatus.PENDING_PAYMENT;
         order.total = await this.calculateOrderTotal(order);
@@ -579,5 +628,20 @@ export class OrderService {
         }
         const shippingCost = Number((order.shippingCost ?? 0).toString());
         return OrderService.calculateCartTotal(itemSubtotal, discountAmount, taxAmount, shippingCost);
+    }
+
+    private hasCompletedFulfillment(order: Order): boolean {
+        return order.paymentStatus === "paid" && Boolean(order.invoiceIssuedAt) && order.isDelivered === true;
+    }
+
+    private synchronizeCompletionStatus(order: Order): void {
+        if (this.hasCompletedFulfillment(order)) {
+            if (order.status !== OrderStatus.COMPLETED) {
+                order.status = OrderStatus.COMPLETED;
+                order.completedAt = order.completedAt ?? new Date();
+            }
+        } else if (order.status === OrderStatus.COMPLETED) {
+            order.status = OrderStatus.PREPARING;
+        }
     }
 }

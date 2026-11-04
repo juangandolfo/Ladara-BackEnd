@@ -155,13 +155,34 @@ Content-Type: application/json
     "postalCode": "62701",
     "country": "US"
   },
-  "paymentMethod": "card"
+  "paymentMethod": "bank_transfer"
 }
 ```
 
-The authenticated user must own the order, and the order must be a non-empty cart. Success returns the order including `id`, `billingAddress`, `paymentMethod`, and `checkoutAt`; its status changes to `pending_payment` while payment confirmation is pending. This records checkout details but does not process or charge the selected payment method. Never send card numbers or CVV to this endpoint.
+The authenticated user must own the order, and the order must be a non-empty cart. `paymentMethod` accepts only `bank_transfer` or `cash`. Success returns the order including the independent payment, invoice, and delivery fields; initially payment is `unpaid`, invoice is unissued, and delivery is false. This records checkout details but does not process or charge the selected payment method. Never send payment credentials to this endpoint.
 
 `billingAddress.company` is optional (maximum 120 characters) and is saved with the rest of the billing address.
+
+## Admin fulfillment update
+
+Admins can update any subset of fulfillment facts; fields omitted from the request remain unchanged. The shared `OrderFulfillmentUpdateDto` type describes the request:
+
+```http
+PATCH http://localhost:3000/api/orders/12/fulfillment
+Authorization: Bearer <admin-jwt>
+Content-Type: application/json
+```
+
+```json
+{
+  "paymentStatus": "paid",
+  "paymentReference": "TRANSFER-9382",
+  "invoiceIdentifier": "INV-2026-0042",
+  "isDelivered": true
+}
+```
+
+`paidAt`, `invoiceIssuedAt`, and `deliveredAt` are server-generated. An invoice identifier implies issuance; a delivery-document identifier alone does not imply delivery. Optional reference/identifier fields can be cleared with `null`. Order responses include these fields and `completedAt`; status becomes `completed` once payment, invoice issuance, and delivery are all recorded.
 
 Failure:
 

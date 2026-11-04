@@ -38,6 +38,30 @@ export class Order {
     @Column({ type: "varchar", length: 50, nullable: true })
     paymentMethod: string | null;
 
+    @Column({ type: "enum", enum: ["unpaid", "paid"], default: "unpaid" })
+    paymentStatus: "unpaid" | "paid";
+
+    @Column({ type: "varchar", length: 255, nullable: true })
+    paymentReference: string | null;
+
+    @Column({ type: "datetime", nullable: true })
+    paidAt: Date | null;
+
+    @Column({ type: "varchar", length: 100, nullable: true })
+    invoiceIdentifier: string | null;
+
+    @Column({ type: "datetime", nullable: true })
+    invoiceIssuedAt: Date | null;
+
+    @Column({ type: "boolean", default: false })
+    isDelivered: boolean;
+
+    @Column({ type: "datetime", nullable: true })
+    deliveredAt: Date | null;
+
+    @Column({ type: "varchar", length: 255, nullable: true })
+    deliveryDocumentIdentifier: string | null;
+
     @Column({ type: "datetime", nullable: true })
     checkoutAt: Date | null;
 

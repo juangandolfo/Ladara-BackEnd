@@ -585,11 +585,37 @@ The completed count uses `completedAt`, the order's completion timestamp, rather
         "country": "US",
         "phone": "+15551234567"
     },
-    "paymentMethod": "card"
+    "paymentMethod": "bank_transfer"
 }
 ```
 
-`billingAddress.company` is optional and limited to 120 characters. It is persisted as part of the order's billing address. The response contains the order ID, saved billing address, payment-method identifier, and `checkoutAt` timestamp. Do not send card numbers, CVV, or other payment credentials.
+`paymentMethod` accepts only `bank_transfer` or `cash`. `billingAddress.company` is optional and limited to 120 characters. It is persisted as part of the order's billing address. The response includes the saved billing address, payment method, and `checkoutAt`, plus the independent fulfillment fields described below. Checkout does not mark the order paid. Do not send payment credentials.
+
+### Update Order Fulfillment
+
+**Endpoint**: `PATCH /orders/:id/fulfillment`
+
+**Description**: Partially update payment, invoice, or delivery information. This action is admin-only.
+
+**Authentication**: Required (JWT token with admin role)
+
+**Request Body** (send one or more fields):
+```json
+{
+    "paymentStatus": "paid",
+    "paymentReference": "TRANSFER-9382",
+    "invoiceIdentifier": "INV-2026-0042",
+    "isDelivered": true
+}
+```
+
+Omitted fields are left unchanged. Optional reference/identifier fields accept `null` to clear the value. `paymentStatus` accepts `unpaid` or `paid`; `paidAt` is set by the server when marked paid and cleared when marked unpaid. `invoiceIssued: true` records issuance without requiring an invoice identifier; setting a non-empty `invoiceIdentifier` also records issuance. `invoiceIssued: false` clears invoice issuance and its identifier. `isDelivered` records delivery independently of `deliveryDocumentIdentifier`; setting a document identifier alone does not mark the order delivered. `paidAt`, `invoiceIssuedAt`, and `deliveredAt` are server-generated and cannot be supplied by clients. No payment credentials are accepted or stored.
+
+When a partial update leaves the order paid, invoiced, and delivered, its status is synchronized to `completed` and `completedAt` is set on the first transition to that state. Removing a prerequisite from a completed order returns its workflow status to `preparing`; `completedAt` remains the timestamp of its first completion.
+
+**Response**: `200` with the updated order object. All order responses include `paymentStatus`, `paymentReference`, `paidAt`, `invoiceIdentifier`, `invoiceIssuedAt`, `isDelivered`, `deliveredAt`, `deliveryDocumentIdentifier`, and `completedAt`; absent references and timestamps are returned as `null`.
+
+**Errors**: `400` for invalid/empty updates, `401` if unauthenticated, `403` if not an admin, `404` if the order does not exist.
 
 ---
 
@@ -597,14 +623,16 @@ The completed count uses `completedAt`, the order's completion timestamp, rather
 
 **Endpoint**: `POST /orders/:id/complete`
 
-**Description**: Mark order as completed (admin only)
+**Description**: Confirm completion of an order (admin only). Completion is allowed only after payment, invoice issuance, and delivery have all been recorded. The fulfillment update action synchronizes completion automatically once these conditions are met.
 
 **Authentication**: Required (JWT token with admin role)
 
 **Path Parameters**:
 - `id` (number) - Order ID
 
-**Response**: Updated order object with status "completed"
+**Response**: Updated order object with status `completed`.
+
+**Conflict**: `409` if the order has not yet been paid, invoiced, and delivered.
 
 ---
 

@@ -268,11 +268,23 @@ export interface OrderItemDto {
 ```typescript
 export interface OrderDto {
     id: number;
-    userId: number;
+    userId: string;
     status: string;
     total: number;
+    shippingCost: number;
     createdAt: string;
     updatedAt: string;
+    paymentMethod?: string;
+    checkoutAt?: string;
+    paymentStatus: 'unpaid' | 'paid';
+    paymentReference: string | null;
+    paidAt: string | null;
+    invoiceIdentifier: string | null;
+    invoiceIssuedAt: string | null;
+    isDelivered: boolean;
+    deliveredAt: string | null;
+    deliveryDocumentIdentifier: string | null;
+    completedAt: string | null;
     items?: OrderItemDto[];
 }
 ```
@@ -286,7 +298,51 @@ export interface OrderDto {
 - `total` - Total order amount
 - `createdAt` - Creation timestamp
 - `updatedAt` - Last update timestamp
+- `paymentStatus`, `paymentReference`, `paidAt` - Payment state, optional reference, and nullable server-generated timestamp
+- `invoiceIdentifier`, `invoiceIssuedAt` - Optional invoice identifier and nullable issuance timestamp
+- `isDelivered`, `deliveredAt`, `deliveryDocumentIdentifier` - Delivery state, nullable timestamp, and optional document identifier
+- `completedAt` - Nullable timestamp set when all completion requirements are first satisfied
 - `items` - Array of OrderItemDto
+
+Fulfillment timestamps and optional references are present in order responses as ISO timestamps or `null` values.
+
+### Interface: CheckoutOrderDto
+
+```typescript
+export interface BillingAddressDto {
+    fullName: string;
+    company?: string;
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    state?: string;
+    postalCode: string;
+    country: string;
+    phone?: string;
+}
+
+export interface CheckoutOrderDto {
+    billingAddress: BillingAddressDto;
+    paymentMethod: 'bank_transfer' | 'cash';
+}
+```
+
+Checkout records the selected method and address only; it does not process a payment.
+
+### Interface: OrderFulfillmentUpdateDto
+
+```typescript
+export interface OrderFulfillmentUpdateDto {
+    paymentStatus?: 'unpaid' | 'paid';
+    paymentReference?: string | null;
+    invoiceIssued?: boolean;
+    invoiceIdentifier?: string | null;
+    isDelivered?: boolean;
+    deliveryDocumentIdentifier?: string | null;
+}
+```
+
+This is a partial admin-only update. Omitted fields remain unchanged; `null` clears optional references. Timestamps are server-generated and cannot be supplied.
 
 **Example Response**:
 ```json

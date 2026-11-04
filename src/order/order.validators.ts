@@ -38,9 +38,47 @@ export const checkoutOrderValidators = [
     body("billingAddress.state").optional().isString().trim(),
     body("billingAddress.phone").optional().isString().trim(),
     body("paymentMethod")
-        .isString().trim().notEmpty().isLength({ max: 50 })
-        .matches(/^[a-zA-Z0-9_-]+$/)
-        .withMessage("Payment method must be a short identifier (do not send card details)"),
+        .isString().trim().isIn(["bank_transfer", "cash"])
+        .withMessage("Payment method must be bank_transfer or cash"),
+];
+
+const fulfillmentUpdateFields = new Set([
+    "paymentStatus",
+    "paymentReference",
+    "invoiceIssued",
+    "invoiceIdentifier",
+    "isDelivered",
+    "deliveryDocumentIdentifier",
+]);
+
+export const updateOrderFulfillmentValidators = [
+    body().custom((value) => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+            throw new Error("A fulfillment update object is required");
+        }
+        const keys = Object.keys(value);
+        if (keys.length === 0) {
+            throw new Error("At least one fulfillment field must be provided");
+        }
+        if (keys.some((key) => !fulfillmentUpdateFields.has(key))) {
+            throw new Error("Fulfillment update contains an unsupported field");
+        }
+        if (value.invoiceIssued === false && typeof value.invoiceIdentifier === "string" && value.invoiceIdentifier.trim()) {
+            throw new Error("Cannot set an invoice identifier while marking the invoice as not issued");
+        }
+        return true;
+    }),
+    body("paymentStatus").optional().isIn(["unpaid", "paid"]).withMessage("Payment status must be unpaid or paid"),
+    body("paymentReference").optional({ nullable: true }).isString().trim().notEmpty().isLength({ max: 255 })
+        .withMessage("Payment reference must be a non-empty string of at most 255 characters or null"),
+    body("invoiceIssued").optional().custom((value) => typeof value === "boolean")
+        .withMessage("invoiceIssued must be a boolean"),
+    body("invoiceIdentifier").optional({ nullable: true }).isString().trim().notEmpty().isLength({ max: 100 })
+        .withMessage("Invoice identifier must be a non-empty string of at most 100 characters or null"),
+    body("isDelivered").optional().custom((value) => typeof value === "boolean")
+        .withMessage("isDelivered must be a boolean"),
+    body("deliveryDocumentIdentifier").optional({ nullable: true }).isString().trim().notEmpty().isLength({ max: 255 })
+        .withMessage("Delivery document identifier must be a non-empty string of at most 255 characters or null"),
 ];
 
 export function handleValidationErrors(req: Request, res: Response, next: NextFunction) {

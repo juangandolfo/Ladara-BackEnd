@@ -40,6 +40,8 @@ import {
   OrderDto,
   ProductFilterDto,
   OrderStatus,
+  CheckoutOrderDto,
+  OrderFulfillmentUpdateDto,
   User,
   ApiResponse,
   AddItemToOrderDto
@@ -51,8 +53,23 @@ const order: OrderDto = {
   userId: 'user-123',
   status: OrderStatus.CART,
   total: 99.99,
+  shippingCost: 0,
   createdAt: new Date().toISOString(),
+  paymentStatus: 'unpaid',
+  paymentReference: null,
+  paidAt: null,
+  invoiceIdentifier: null,
+  invoiceIssuedAt: null,
+  isDelivered: false,
+  deliveredAt: null,
+  deliveryDocumentIdentifier: null,
+  completedAt: null,
   items: []
+};
+
+const fulfillmentUpdate: OrderFulfillmentUpdateDto = {
+  paymentStatus: 'paid',
+  paymentReference: 'TRANSFER-9382'
 };
 ```
 
@@ -111,8 +128,9 @@ try {
 
 ### Types (`types.ts`)
 
-- **Enums**: `OrderStatus`, `DiscountType`
+- **Enums/types**: `OrderStatus`, `OrderPaymentMethod`, `OrderPaymentStatus`, `DiscountType`
 - **DTOs**: `ProductFilterDto`, `CreateProductDto`, `OrderDto`, etc.
+- **Order requests**: `CheckoutOrderDto`, `OrderFulfillmentUpdateDto`
 - **Interfaces**: `User`, `Order`, `Product`, `Discount`, etc.
 - **Responses**: `ApiResponse<T>`, `ErrorResponse`, etc.
 
@@ -123,6 +141,8 @@ try {
 - `ORDER_ENDPOINTS` - Order/cart routes
 - `DISCOUNT_ENDPOINTS` - Discount routes
 - `ApiRoutes` - Type-safe URL builders
+
+Use `ApiRoutes.orders.updateFulfillment(orderId)` with `PATCH` and an `OrderFulfillmentUpdateDto` body for the authenticated admin fulfillment action. Checkout accepts only `bank_transfer` or `cash`.
 
 ### Error Handling (`errors.ts`)
 

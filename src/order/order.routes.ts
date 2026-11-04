@@ -21,6 +21,7 @@ import {
     addItemToOrderValidators,
     updateItemQuantityValidators,
     checkoutOrderValidators,
+    updateOrderFulfillmentValidators,
     handleValidationErrors
 } from "./order.validators";
 
@@ -56,6 +57,7 @@ router.delete("/current/items", authorizeCartClear, orderController.clearCurrent
 
 router.get("/admin/dashboard-summary", ...authorizeAndCheckAdmin, orderController.getAdminDashboardSummary);
 router.get("/admin", ...authorizeAndCheckAdmin, orderController.getAllOrdersForAdmin);
+router.patch("/:id/fulfillment", ...orderIdParamValidator, ...updateOrderFulfillmentValidators, handleValidationErrors, ...authorizeAndCheckAdmin, orderController.updateOrderFulfillment);
 router.get("/", authorize, orderController.getOrdersByUser);
 router.post("/coupons/validate", authorize, orderController.validateCoupon);
 router.post("/:id/checkout", ...orderIdParamValidator, ...checkoutOrderValidators, handleValidationErrors, ...authorizeAndCheckOwner, orderController.initiateCheckout);

@@ -3,6 +3,35 @@ export interface AddItemToOrderDto {
   quantity: number;
 }
 
+export type OrderPaymentMethod = "bank_transfer" | "cash";
+export type OrderPaymentStatus = "unpaid" | "paid";
+
+export interface BillingAddressDto {
+  fullName: string;
+  company?: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state?: string;
+  postalCode: string;
+  country: string;
+  phone?: string;
+}
+
+export interface CheckoutOrderDto {
+  billingAddress: BillingAddressDto;
+  paymentMethod: OrderPaymentMethod;
+}
+
+export interface OrderFulfillmentUpdateDto {
+  paymentStatus?: OrderPaymentStatus;
+  paymentReference?: string | null;
+  invoiceIssued?: boolean;
+  invoiceIdentifier?: string | null;
+  isDelivered?: boolean;
+  deliveryDocumentIdentifier?: string | null;
+}
+
 export interface OrderItemDto {
   id: number;
   productId: number;
@@ -41,25 +70,24 @@ export interface CheckoutValidationData {
 
 export interface OrderDto {
   id: number;
-  userId: number;
+  userId: string;
   status: string;
   total: number;
   shippingCost: number;
   createdAt: string;
   updatedAt: string;
-  billingAddress?: {
-    fullName: string;
-    company?: string;
-    addressLine1: string;
-    addressLine2?: string;
-    city: string;
-    state?: string;
-    postalCode: string;
-    country: string;
-    phone?: string;
-  };
-  paymentMethod?: string;
+  billingAddress?: BillingAddressDto;
+  paymentMethod?: OrderPaymentMethod | string;
   checkoutAt?: string;
+  paymentStatus: OrderPaymentStatus;
+  paymentReference: string | null;
+  paidAt: string | null;
+  invoiceIdentifier: string | null;
+  invoiceIssuedAt: string | null;
+  isDelivered: boolean;
+  deliveredAt: string | null;
+  deliveryDocumentIdentifier: string | null;
+  completedAt: string | null;
   items?: OrderItemDto[];
 }
 
