@@ -19,7 +19,7 @@ export interface BillingAddressDto {
 }
 
 export interface CheckoutOrderDto {
-  billingAddress: BillingAddressDto;
+  billingInformationId: number;
   paymentMethod: OrderPaymentMethod;
 }
 
@@ -76,6 +76,7 @@ export interface OrderDto {
   shippingCost: number;
   createdAt: string;
   updatedAt: string;
+  billingInformationId?: number;
   billingAddress?: BillingAddressDto;
   paymentMethod?: OrderPaymentMethod | string;
   checkoutAt?: string;

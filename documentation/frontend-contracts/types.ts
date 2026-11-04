@@ -12,10 +12,12 @@ export interface CreateProductDto { name: string; price: number; category: strin
 export interface UpdateProductDto { name?: string; price?: number; description?: string; code?: string; stock?: number; category?: string; image?: string; }
 export interface ProductFilterResult { products: Product[]; total: number; count: number; appliedFilters: ProductFilterDto; }
 export interface OrderItem { id: number; productId: number; quantity: number; price: number; total: number; discountedPrice?: number; product?: { id: number; name: string; price: number; discountedPrice?: number; image: string; category: string; description?: string; }; }
-export interface Order { id: number; userId: string; status: OrderStatus; total: number; shippingCost: number; createdAt: string; updatedAt?: string; billingAddress?: BillingAddress; paymentMethod?: string; checkoutAt?: string; paymentStatus: OrderPaymentStatus; paymentReference: string | null; paidAt: string | null; invoiceIdentifier: string | null; invoiceIssuedAt: string | null; isDelivered: boolean; deliveredAt: string | null; deliveryDocumentIdentifier: string | null; completedAt: string | null; items?: OrderItem[]; }
+export interface Order { id: number; userId: string; status: OrderStatus; total: number; shippingCost: number; createdAt: string; updatedAt?: string; billingInformationId?: number; billingAddress?: BillingAddress; paymentMethod?: string; checkoutAt?: string; paymentStatus: OrderPaymentStatus; paymentReference: string | null; paidAt: string | null; invoiceIdentifier: string | null; invoiceIssuedAt: string | null; isDelivered: boolean; deliveredAt: string | null; deliveryDocumentIdentifier: string | null; completedAt: string | null; items?: OrderItem[]; }
 export interface OrderDto extends Order {}
 export interface BillingAddress { fullName: string; company?: string; addressLine1: string; addressLine2?: string; city: string; state?: string; postalCode: string; country: string; phone?: string; }
-export interface CheckoutOrderDto { billingAddress: BillingAddress; paymentMethod: OrderPaymentMethod; }
+export interface BillingInformation extends BillingAddress { id: number; userId: string; createdAt: string; }
+export interface BillingInformationInput extends BillingAddress {}
+export interface CheckoutOrderDto { billingInformationId: number; paymentMethod: OrderPaymentMethod; }
 export interface OrderFulfillmentUpdateDto { paymentStatus?: OrderPaymentStatus; paymentReference?: string | null; invoiceIssued?: boolean; invoiceIdentifier?: string | null; isDelivered?: boolean; deliveryDocumentIdentifier?: string | null; }
 export interface AdminOrderDashboardSummary { cartCount: number; orderPlacedCount: number; completedLast30DaysCount: number; }
 export interface AddItemToOrderDto { productId: number; quantity: number; }

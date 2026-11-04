@@ -17,6 +17,7 @@ import {
 import {DiscountService} from "../discount/discount.service";
 import {BusinessSettingService} from "../business-settings/business-setting.service";
 import {EmailService, BillingDetails} from "../email/email.service";
+import {BillingInformation} from "../billing-information/billing-information.entity";
 
 export class OrderController {
     private orderService: OrderService;
@@ -30,11 +31,12 @@ export class OrderController {
         userRepo: Repository<User>,
         private discountService: DiscountService,
         businessSettingService?: BusinessSettingService,
-        private emailService: EmailService = new EmailService()
+        private emailService: EmailService = new EmailService(),
+        billingInformationRepo?: Repository<BillingInformation>
     ) {
         this.orderRepo = orderRepo;
         this.productRepo = productRepo;
-        this.orderService = new OrderService(orderRepo, itemRepo, productRepo, userRepo, discountService, businessSettingService);
+        this.orderService = new OrderService(orderRepo, itemRepo, productRepo, userRepo, discountService, businessSettingService, billingInformationRepo);
     }
 
     getCurrentOrder = async (req: Request, res: Response<GetCurrentOrderResponse>): Promise<void> => {
@@ -222,7 +224,7 @@ export class OrderController {
             const order = await this.orderService.initiateCheckout(
                 Number(req.params.id),
                 user.id,
-                req.body.billingAddress,
+                req.body.billingInformationId,
                 req.body.paymentMethod,
             );
             if (!order) {
@@ -242,6 +244,10 @@ export class OrderController {
             }
             if (error instanceof Error && error.message === "INVALID_PAYMENT_METHOD") {
                 res.status(400).json({success: false, message: "Payment method must be bank_transfer or cash"});
+                return;
+            }
+            if (error instanceof Error && error.message === "BILLING_INFORMATION_NOT_FOUND") {
+                res.status(404).json({success: false, message: "Billing information not found for this user"});
                 return;
             }
             res.status(500).json({success: false, message: error instanceof Error ? error.message : "Unknown error"});
@@ -358,7 +364,18 @@ export class OrderController {
             shippingCost: Number(shippingCost.toFixed(2)),
             createdAt: order.createdAt.toISOString(),
             updatedAt: (order as any).updatedAt?.toISOString() || order.createdAt.toISOString(),
-            billingAddress: order.billingAddress ?? undefined,
+            billingInformationId: order.billingInformation?.id ?? (order as any).billingInformationId ?? undefined,
+            billingAddress: order.billingInformation ? {
+                fullName: order.billingInformation.fullName,
+                ...(order.billingInformation.company ? {company: order.billingInformation.company} : {}),
+                addressLine1: order.billingInformation.addressLine1,
+                ...(order.billingInformation.addressLine2 ? {addressLine2: order.billingInformation.addressLine2} : {}),
+                city: order.billingInformation.city,
+                ...(order.billingInformation.state ? {state: order.billingInformation.state} : {}),
+                postalCode: order.billingInformation.postalCode,
+                country: order.billingInformation.country,
+                ...(order.billingInformation.phone ? {phone: order.billingInformation.phone} : {}),
+            } : undefined,
             paymentMethod: order.paymentMethod ?? undefined,
             checkoutAt: order.checkoutAt?.toISOString(),
             paymentStatus: order.paymentStatus ?? "unpaid",

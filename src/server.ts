@@ -12,6 +12,7 @@ import dotenv from 'dotenv';
 import orderRoutes from "./order/order.routes";
 import discountRoutes from "./discount/discount.routes";
 import businessSettingRoutes from "./business-settings/business-setting.routes";
+import billingInformationRoutes from "./billing-information/billing-information.routes";
 
 dotenv.config();
 
@@ -57,6 +58,7 @@ const PORT = process.env.PORT || 3000;
         app.use('/api/orders', orderRoutes);
         app.use('/api/discounts', discountRoutes);
         app.use('/api/settings', businessSettingRoutes);
+        app.use('/api/billing-information', billingInformationRoutes);
 
         app.listen(PORT, () => {
             console.log(`Server is running on port ${PORT}`);

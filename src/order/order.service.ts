@@ -1,5 +1,5 @@
 import {Between, Repository} from "typeorm";
-import {BillingAddress, Order} from "./entities/order.entity";
+import {Order} from "./entities/order.entity";
 import {OrderItem} from "./entities/order-item.entity";
 import {Product} from "../product/product.entity";
 import {User} from "../user/user.entity";
@@ -7,6 +7,7 @@ import {DiscountService} from "../discount/discount.service";
 import {OrderStatus} from "./types/order-status.type";
 import {BusinessSettingService} from "../business-settings/business-setting.service";
 import {OrderFulfillmentUpdateDto} from "../dtos/order.dto";
+import {BillingInformation} from "../billing-information/billing-information.entity";
 
 export type CartItemInput = {
     id?: number | string;
@@ -30,7 +31,7 @@ export class OrderService {
     private readonly productRepo: Repository<Product>;
     private readonly userRepo: Repository<User>;
 
-    constructor(orderRepo: Repository<Order>, itemRepo: Repository<OrderItem>, productRepo: Repository<Product>, userRepo: Repository<User>, private discountService: DiscountService, private businessSettingService?: BusinessSettingService) {
+    constructor(orderRepo: Repository<Order>, itemRepo: Repository<OrderItem>, productRepo: Repository<Product>, userRepo: Repository<User>, private discountService: DiscountService, private businessSettingService?: BusinessSettingService, private billingInformationRepo?: Repository<BillingInformation>) {
         this.orderRepo = orderRepo;
         this.itemRepo = itemRepo;
         this.productRepo = productRepo;
@@ -313,7 +314,7 @@ export class OrderService {
     async getCurrentOrder(userId: string): Promise<Order[]> {
         const orders = await this.orderRepo.find({
             where: {user: {id: userId}, status: OrderStatus.CART},
-            relations: ["items", "items.product", "user"],
+            relations: ["items", "items.product", "user", "billingInformation"],
         });
 
         for (const order of orders) {
@@ -336,7 +337,7 @@ export class OrderService {
     async clearCurrentCart(userId: string): Promise<void> {
         const order = await this.orderRepo.findOne({
             where: {user: {id: userId}, status: OrderStatus.CART},
-            relations: ["items", "items.product", "user"],
+            relations: ["items", "items.product", "user", "billingInformation"],
         });
         if (!order) return;
 
@@ -349,7 +350,7 @@ export class OrderService {
     async getOrdersByUser(userId: string): Promise<Order[]> {
         const orders = await this.orderRepo.find({
             where: {user: {id: userId}},
-            relations: ["items", "items.product", "user"],
+            relations: ["items", "items.product", "user", "billingInformation"],
             order: {createdAt: "DESC"}
         });
 
@@ -370,7 +371,7 @@ export class OrderService {
 
     async getAllOrdersForAdmin(): Promise<Order[]> {
         return this.orderRepo.find({
-            relations: ["items", "items.product", "user"],
+            relations: ["items", "items.product", "user", "billingInformation"],
             order: {createdAt: "DESC"},
         });
     }
@@ -428,7 +429,7 @@ export class OrderService {
     async addItemToOrder(orderId: number, productId: number, quantity: number): Promise<OrderItem | null> {
         const order = await this.orderRepo.findOne({
             where: {id: orderId},
-            relations: ["items", "items.product", "user"],
+            relations: ["items", "items.product", "user", "billingInformation"],
         });
         const product = await this.productRepo.findOneBy({id: productId});
         if (!order || !product) return null;
@@ -500,7 +501,7 @@ export class OrderService {
     async markOrderCompleted(orderId: number): Promise<Order | null> {
         const order = await this.orderRepo.findOne({
             where: {id: orderId},
-            relations: ["items", "items.product", "user"],
+            relations: ["items", "items.product", "user", "billingInformation"],
         });
         if (!order) return null;
         if (!this.hasCompletedFulfillment(order)) {
@@ -514,7 +515,7 @@ export class OrderService {
     async updateOrderFulfillment(orderId: number, update: OrderFulfillmentUpdateDto): Promise<Order | null> {
         const order = await this.orderRepo.findOne({
             where: {id: orderId},
-            relations: ["items", "items.product", "user"],
+            relations: ["items", "items.product", "user", "billingInformation"],
         });
         if (!order) return null;
 
@@ -554,15 +555,20 @@ export class OrderService {
         return this.orderRepo.save(order);
     }
 
-    async initiateCheckout(orderId: number, userId: string, billingAddress: BillingAddress, paymentMethod: string): Promise<Order | null> {
+    async initiateCheckout(orderId: number, userId: string, billingInformationId: number, paymentMethod: string): Promise<Order | null> {
         const normalizedPaymentMethod = typeof paymentMethod === "string" ? paymentMethod.trim() : "";
         if (normalizedPaymentMethod !== "bank_transfer" && normalizedPaymentMethod !== "cash") {
             throw new Error("INVALID_PAYMENT_METHOD");
         }
+        if (!this.billingInformationRepo) throw new Error("BILLING_INFORMATION_SERVICE_UNAVAILABLE");
+        const billingInformation = await this.billingInformationRepo.findOne({
+            where: {id: billingInformationId, user: {id: userId}},
+        });
+        if (!billingInformation) throw new Error("BILLING_INFORMATION_NOT_FOUND");
 
         const order = await this.orderRepo.findOne({
             where: {id: orderId, user: {id: userId}},
-            relations: ["items", "items.product", "user"],
+            relations: ["items", "items.product", "user", "billingInformation"],
         });
         if (!order) return null;
         if (order.status !== OrderStatus.CART) {
@@ -572,18 +578,7 @@ export class OrderService {
             throw new Error("ORDER_EMPTY");
         }
 
-        // Store only address data and the payment-method identifier; never persist payment credentials.
-        order.billingAddress = {
-            fullName: billingAddress.fullName.trim(),
-            ...(billingAddress.company?.trim() ? {company: billingAddress.company.trim()} : {}),
-            addressLine1: billingAddress.addressLine1.trim(),
-            ...(billingAddress.addressLine2 ? {addressLine2: billingAddress.addressLine2.trim()} : {}),
-            city: billingAddress.city.trim(),
-            ...(billingAddress.state ? {state: billingAddress.state.trim()} : {}),
-            postalCode: billingAddress.postalCode.trim(),
-            country: billingAddress.country.trim(),
-            ...(billingAddress.phone ? {phone: billingAddress.phone.trim()} : {}),
-        };
+        order.billingInformation = billingInformation;
         order.paymentMethod = normalizedPaymentMethod;
         order.checkoutAt = new Date();
         order.status = OrderStatus.ORDER_PLACED;

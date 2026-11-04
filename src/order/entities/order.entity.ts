@@ -1,19 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn, JoinColumn } from "typeorm";
 import { User} from "../../user/user.entity";
 import { OrderItem } from "./order-item.entity";
 import {OrderStatus} from "../types/order-status.type";
-
-export interface BillingAddress {
-  fullName: string;
-  company?: string;
-  addressLine1: string;
-  addressLine2?: string;
-  city: string;
-  state?: string;
-  postalCode: string;
-  country: string;
-  phone?: string;
-}
+import {BillingInformation} from "../../billing-information/billing-information.entity";
 
 @Entity()
 export class Order {
@@ -32,8 +21,9 @@ export class Order {
     @Column("decimal", { precision: 10, scale: 2, default: 0 })
     shippingCost: number;
 
-    @Column({ type: "json", nullable: true })
-    billingAddress: BillingAddress | null;
+    @ManyToOne(() => BillingInformation, {nullable: true, onDelete: "RESTRICT"})
+    @JoinColumn({name: "billingInformationId"})
+    billingInformation: BillingInformation | null;
 
     @Column({ type: "varchar", length: 50, nullable: true })
     paymentMethod: string | null;

@@ -15,6 +15,7 @@ import {DiscountService} from "../discount/discount.service";
 import {BusinessSettingService} from "../business-settings/business-setting.service";
 import {BusinessSetting} from "../business-settings/business-setting.entity";
 import {EmailService} from "../email/email.service";
+import {BillingInformation} from "../billing-information/billing-information.entity";
 import {
     orderIdParamValidator,
     itemIdParamValidator,
@@ -36,7 +37,8 @@ const orderController = new OrderController(
     dataSource.getRepository(User),
     discountService,
     businessSettingService,
-    emailService
+    emailService,
+    dataSource.getRepository(BillingInformation)
 );
 
 const checkoutController = new CheckoutController();

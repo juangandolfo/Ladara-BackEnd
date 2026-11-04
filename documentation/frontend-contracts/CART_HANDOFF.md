@@ -139,7 +139,7 @@ Success:
 
 ### Submit checkout details
 
-After the user enters their billing address and chooses a payment method, submit the details against their order:
+First load the user's saved addresses from `GET /api/billing-information` and let them select one. If the user has no saved address, create one before checkout. Full CRUD details and response examples are in [BILLING_INFORMATION_HANDOFF.md](BILLING_INFORMATION_HANDOFF.md).
 
 ```http
 POST http://localhost:3000/api/orders/12/checkout
@@ -147,21 +147,12 @@ Authorization: Bearer <jwt>
 Content-Type: application/json
 
 {
-  "billingAddress": {
-    "fullName": "Jane Doe",
-    "company": "Example, Inc.",
-    "addressLine1": "123 Main Street",
-    "city": "Springfield",
-    "postalCode": "62701",
-    "country": "US"
-  },
+  "billingInformationId": 45,
   "paymentMethod": "bank_transfer"
 }
 ```
 
-The authenticated user must own the order, and the order must be a non-empty cart. `paymentMethod` accepts only `bank_transfer` or `cash`. Success returns the order including the independent payment, invoice, and delivery fields; initially payment is `unpaid`, invoice is unissued, and delivery is false. This records checkout details but does not process or charge the selected payment method. Never send payment credentials to this endpoint.
-
-`billingAddress.company` is optional (maximum 120 characters) and is saved with the rest of the billing address.
+The authenticated user must own both the order and selected billing record, and the order must be a non-empty cart. `paymentMethod` accepts only `bank_transfer` or `cash`. The response includes `billingInformationId` and the selected address as `billingAddress`, along with the independent payment, invoice, and delivery fields. Checkout records the selected method and address but does not process payment. Never send payment credentials.
 
 ## Admin fulfillment update
 

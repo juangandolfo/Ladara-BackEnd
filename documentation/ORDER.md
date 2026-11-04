@@ -26,7 +26,7 @@ The Order module manages shopping carts and order processing. It handles cart cr
 | `user` | UUID | FK to users, NOT NULL | Order owner |
 | `createdAt` | DATETIME | Auto-set | Creation timestamp |
 | `completedAt` | DATETIME | Nullable | Timestamp set when the order first satisfies payment, invoice, and delivery requirements; used for the last-30-days dashboard metric |
-| `billingAddress` | JSON | Nullable | Checkout billing details, including optional `company` |
+| `billingInformation` | INT | Nullable FK | User-owned saved billing record selected at checkout |
 | `paymentMethod` | VARCHAR(50) | Nullable | Payment method selected at checkout; new checkouts accept `bank_transfer` or `cash` |
 | `paymentStatus` | ENUM | Not null, default `unpaid` | Independent payment state: `unpaid` or `paid` |
 | `paymentReference` | VARCHAR(255) | Nullable | Optional payment reference; never payment credentials |
@@ -588,7 +588,7 @@ POST /orders/:id/checkout
 
 New checkout requests accept only `bank_transfer` or `cash`. Existing historical payment-method values remain readable.
 
-The billing address may include the optional `company` field (maximum 120 characters), which is saved with the rest of the checkout address.
+Billing addresses are managed separately in `billing_information`. Checkout accepts a `billingInformationId` belonging to the authenticated user. Orders expose that ID and the selected record's address data. An address linked to an order cannot be deleted; editing a saved record changes the address returned for orders linked to it.
 
 ---
 

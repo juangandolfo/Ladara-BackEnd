@@ -128,7 +128,7 @@ test('admin order listing retrieves all users’ orders with dashboard relations
 
   assert.deepEqual(await service.getAllOrdersForAdmin(), orders);
   assert.deepEqual(findOptions, {
-    relations: ['items', 'items.product', 'user'],
+    relations: ['items', 'items.product', 'user', 'billingInformation'],
     order: { createdAt: 'DESC' },
   });
   assert.equal('where' in findOptions, false);
@@ -431,7 +431,7 @@ test('frontend cart contract exposes product stock and supports coupon plus chec
   assert.deepEqual(checkoutResponse.response.body.data.rejectedItems, []);
 });
 
-test('initiateCheckout persists billing details and payment method on the owned order', async () => {
+test('initiateCheckout links a user-owned billing record and payment method to the owned order', async () => {
   const user = { id: 'user-1' } as any;
   const order = {
     id: 123,
@@ -442,6 +442,17 @@ test('initiateCheckout persists billing details and payment method on the owned 
     items: [{ id: 1, quantity: 2, price: 10, product: { id: 4 } }],
   } as any;
   let lookup: any;
+  const billingInformation = {
+    id: 45,
+    user,
+    fullName: 'Jane Doe',
+    company: 'Example, Inc.',
+    addressLine1: '123 Main Street',
+    city: 'Springfield',
+    postalCode: '62701',
+    country: 'US',
+  } as any;
+  let billingLookup: any;
   const orderRepo: any = {
     findOne: async (options: any) => {
       lookup = options;
@@ -455,27 +466,16 @@ test('initiateCheckout persists billing details and payment method on the owned 
     {} as any,
     {} as any,
     { listDiscountsByUser: async () => [] } as any,
+    undefined,
+    { findOne: async (options: any) => { billingLookup = options; return billingInformation; } } as any,
   );
 
-  const checkedOutOrder = await service.initiateCheckout(123, user.id, {
-    fullName: ' Jane Doe ',
-    company: ' Example, Inc. ',
-    addressLine1: ' 123 Main Street ',
-    city: ' Springfield ',
-    postalCode: ' 62701 ',
-    country: ' US ',
-  }, ' bank_transfer ');
+  const checkedOutOrder = await service.initiateCheckout(123, user.id, 45, ' bank_transfer ');
 
+  assert.deepEqual(billingLookup.where, { id: 45, user: { id: 'user-1' } });
   assert.deepEqual(lookup.where, { id: 123, user: { id: 'user-1' } });
   assert.equal(checkedOutOrder?.id, 123);
-  assert.deepEqual(checkedOutOrder?.billingAddress, {
-    fullName: 'Jane Doe',
-    company: 'Example, Inc.',
-    addressLine1: '123 Main Street',
-    city: 'Springfield',
-    postalCode: '62701',
-    country: 'US',
-  });
+  assert.equal(checkedOutOrder?.billingInformation, billingInformation);
   assert.equal(checkedOutOrder?.paymentMethod, 'bank_transfer');
   assert.ok(checkedOutOrder?.checkoutAt instanceof Date);
   assert.equal(checkedOutOrder?.status, OrderStatus.ORDER_PLACED);
@@ -495,37 +495,31 @@ test('initiateCheckout rejects empty carts and orders that already left cart sta
     {} as any,
     {} as any,
     { listDiscountsByUser: async () => [] } as any,
+    undefined,
+    { findOne: async () => ({ id: 1 }) } as any,
   );
-  const address = { fullName: 'Jane Doe', addressLine1: '123 Main Street', city: 'Springfield', postalCode: '62701', country: 'US' };
 
-  await assert.rejects(service.initiateCheckout(123, 'user-1', address, 'bank_transfer'), { message: 'ORDER_EMPTY' });
+  await assert.rejects(service.initiateCheckout(123, 'user-1', 1, 'bank_transfer'), { message: 'ORDER_EMPTY' });
   order.status = OrderStatus.ORDER_PLACED;
   order.items = [{ quantity: 1, price: 10, product: { id: 4 } }];
-  await assert.rejects(service.initiateCheckout(123, 'user-1', address, 'bank_transfer'), { message: 'ORDER_NOT_IN_CART' });
-  await assert.rejects(service.initiateCheckout(123, 'user-1', address, 'card'), { message: 'INVALID_PAYMENT_METHOD' });
+  await assert.rejects(service.initiateCheckout(123, 'user-1', 1, 'bank_transfer'), { message: 'ORDER_NOT_IN_CART' });
+  await assert.rejects(service.initiateCheckout(123, 'user-1', 1, 'card'), { message: 'INVALID_PAYMENT_METHOD' });
 });
 
 test('checkout validator accepts only bank_transfer and cash payment methods', async () => {
-  const validAddress = {
-    fullName: 'Ada Lovelace',
-    addressLine1: '1 Example Street',
-    city: 'London',
-    postalCode: 'N1 1AA',
-    country: 'UK',
-  };
-
   for (const paymentMethod of ['bank_transfer', 'cash']) {
     assert.deepEqual(await validateRequest(checkoutOrderValidators, {
-      billingAddress: validAddress,
+      billingInformationId: 45,
       paymentMethod,
     }), []);
   }
 
   const invalidMethodErrors = await validateRequest(checkoutOrderValidators, {
-    billingAddress: validAddress,
+    billingInformationId: 45,
     paymentMethod: 'card',
   });
   assert.match(JSON.stringify(invalidMethodErrors), /paymentMethod/);
+  assert.notEqual((await validateRequest(checkoutOrderValidators, {paymentMethod: 'cash'})).length, 0);
 });
 
 test('fulfillment validator supports partial updates and rejects empty, unknown, and malformed fields', async () => {

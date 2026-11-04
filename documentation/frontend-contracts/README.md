@@ -126,11 +126,18 @@ try {
 
 ## Structure
 
+### Frontend handoffs
+
+- [Billing information and checkout](BILLING_INFORMATION_HANDOFF.md) — manage saved addresses and select one at checkout.
+- [Cart flow](CART_HANDOFF.md) — cart operations and checkout integration.
+- [Order status](ORDER_STATUS_HANDOFF.md) and [fulfillment](FULFILLMENT_HANDOFF.md) — order lifecycle and admin fulfillment behavior.
+
 ### Types (`types.ts`)
 
 - **Enums/types**: `OrderStatus`, `OrderPaymentMethod`, `OrderPaymentStatus`, `DiscountType`
 - **DTOs**: `ProductFilterDto`, `CreateProductDto`, `OrderDto`, etc.
 - **Order requests**: `CheckoutOrderDto`, `OrderFulfillmentUpdateDto`
+- **Billing addresses**: `BillingInformation`, `BillingInformationInput`
 - **Interfaces**: `User`, `Order`, `Product`, `Discount`, etc.
 - **Responses**: `ApiResponse<T>`, `ErrorResponse`, etc.
 
@@ -139,6 +146,7 @@ try {
 - `AUTH_ENDPOINTS` - Authentication routes
 - `PRODUCT_ENDPOINTS` - Product management routes
 - `ORDER_ENDPOINTS` - Order/cart routes
+- `BILLING_INFORMATION_ENDPOINTS` - User-owned saved billing addresses
 - `DISCOUNT_ENDPOINTS` - Discount routes
 - `ApiRoutes` - Type-safe URL builders
 

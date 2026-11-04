@@ -378,6 +378,57 @@ The change is applied to all existing cart orders by the database migration trig
 
 ---
 
+## Billing Information Endpoints
+
+All billing-information endpoints require a JWT Bearer token and operate only on the authenticated user's records. The API is mounted at `/api/billing-information`.
+
+### List Billing Information
+
+**Endpoint**: `GET /api/billing-information`
+
+Returns the current user's saved billing addresses.
+
+### Get Billing Information
+
+**Endpoint**: `GET /api/billing-information/:id`
+
+Returns one address owned by the current user. Addresses owned by another user are not disclosed and return `404`.
+
+### Create Billing Information
+
+**Endpoint**: `POST /api/billing-information`
+
+**Request Body**:
+```json
+{
+    "fullName": "Jane Doe",
+    "company": "Example, Inc.",
+    "addressLine1": "123 Main Street",
+    "addressLine2": "Apartment 4",
+    "city": "Springfield",
+    "state": "IL",
+    "postalCode": "62701",
+    "country": "US",
+    "phone": "+15551234567"
+}
+```
+
+`fullName`, `addressLine1`, `city`, `postalCode`, and `country` are required. The returned object includes its generated `id`, `userId`, and `createdAt`.
+
+### Update Billing Information
+
+**Endpoint**: `PUT /api/billing-information/:id`
+
+Accepts the same complete address body as create. Only an address owned by the authenticated user can be updated.
+
+### Delete Billing Information
+
+**Endpoint**: `DELETE /api/billing-information/:id`
+
+Deletes an unused address. Returns `409` if an order references the address, preserving that order's billing association.
+
+---
+
 ## Order Endpoints
 
 ### Get Current Order
@@ -567,29 +618,19 @@ The completed count uses `completedAt`, the order's completion timestamp, rather
 
 **Endpoint**: `POST /orders/:id/checkout`
 
-**Description**: Save the authenticated customer's billing address, selected payment method, and checkout timestamp. The order moves from `cart` to `order_placed`; payment, invoice, and delivery progress are tracked independently. This endpoint does not charge or process a payment.
+**Description**: Associate one of the authenticated customer's saved billing records with the order, save the selected payment method and checkout timestamp. The order moves from `cart` to `order_placed`; payment, invoice, and delivery progress are tracked independently. This endpoint does not charge or process a payment.
 
 **Authentication**: Required (JWT token; the order must belong to the authenticated user)
 
 **Request Body**:
 ```json
 {
-    "billingAddress": {
-        "fullName": "Jane Doe",
-        "company": "Example, Inc.",
-        "addressLine1": "123 Main Street",
-        "addressLine2": "Apartment 4",
-        "city": "Springfield",
-        "state": "IL",
-        "postalCode": "62701",
-        "country": "US",
-        "phone": "+15551234567"
-    },
+    "billingInformationId": 12,
     "paymentMethod": "bank_transfer"
 }
 ```
 
-`paymentMethod` accepts only `bank_transfer` or `cash`. `billingAddress.company` is optional and limited to 120 characters. It is persisted as part of the order's billing address. The response includes the saved billing address, payment method, and `checkoutAt`, plus the independent fulfillment fields described below. Checkout does not mark the order paid. Do not send payment credentials.
+`paymentMethod` accepts only `bank_transfer` or `cash`. `billingInformationId` must identify an address owned by the authenticated user. The response contains `billingInformationId` and the selected address as `billingAddress`. Checkout does not mark the order paid. Do not send payment credentials.
 
 ### Update Order Fulfillment
 

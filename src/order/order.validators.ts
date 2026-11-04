@@ -27,16 +27,7 @@ export const updateItemQuantityValidators = [
 ];
 
 export const checkoutOrderValidators = [
-    body("billingAddress").isObject({ strict: true }).withMessage("Billing address is required"),
-    body("billingAddress.fullName").isString().trim().notEmpty().withMessage("Billing full name is required"),
-    body("billingAddress.addressLine1").isString().trim().notEmpty().withMessage("Billing address line 1 is required"),
-    body("billingAddress.city").isString().trim().notEmpty().withMessage("Billing city is required"),
-    body("billingAddress.postalCode").isString().trim().notEmpty().withMessage("Billing postal code is required"),
-    body("billingAddress.country").isString().trim().notEmpty().withMessage("Billing country is required"),
-    body("billingAddress.company").optional().isString().trim().isLength({max: 120}).withMessage("Billing company must be 120 characters or fewer"),
-    body("billingAddress.addressLine2").optional().isString().trim(),
-    body("billingAddress.state").optional().isString().trim(),
-    body("billingAddress.phone").optional().isString().trim(),
+    body("billingInformationId").isInt({min: 1}).withMessage("Billing information ID must be a positive integer"),
     body("paymentMethod")
         .isString().trim().isIn(["bank_transfer", "cash"])
         .withMessage("Payment method must be bank_transfer or cash"),

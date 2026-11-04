@@ -274,6 +274,8 @@ export interface OrderDto {
     shippingCost: number;
     createdAt: string;
     updatedAt: string;
+    billingInformationId?: number;
+    billingAddress?: BillingAddressDto;
     paymentMethod?: string;
     checkoutAt?: string;
     paymentStatus: 'unpaid' | 'paid';
@@ -322,12 +324,36 @@ export interface BillingAddressDto {
 }
 
 export interface CheckoutOrderDto {
-    billingAddress: BillingAddressDto;
+    billingInformationId: number;
     paymentMethod: 'bank_transfer' | 'cash';
 }
 ```
 
-Checkout records the selected method and address only; it does not process a payment.
+`BillingInformationDto` contains `id`, `userId`, `createdAt`, and the fields in `BillingAddressDto`. Checkout records the selected saved address ID and payment method only; it does not process a payment.
+
+### Interface: BillingInformationInput
+
+```typescript
+export interface BillingInformationInput {
+    fullName: string;
+    company?: string;
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    state?: string;
+    postalCode: string;
+    country: string;
+    phone?: string;
+}
+
+export interface BillingInformationDto extends BillingInformationInput {
+    id: number;
+    userId: string;
+    createdAt: string;
+}
+```
+
+Create and update require `fullName`, `addressLine1`, `city`, `postalCode`, and `country`; other fields are optional.
 
 ### Interface: OrderFulfillmentUpdateDto
 

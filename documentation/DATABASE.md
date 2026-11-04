@@ -21,6 +21,10 @@ User (1) ──────────┐
   │
   └──────────────── Discount (N)
 
+User (1) ───────── BillingInformation (N)
+                         │
+                         └──────── Order (N, optional selected address)
+
 Product
   └─ No direct relations
 ```
@@ -70,6 +74,9 @@ export class Product {
 
     @Column({ length: 100 })
     name: string;
+
+    @ManyToOne(() => BillingInformation, { nullable: true, onDelete: "RESTRICT" })
+    billingInformation: BillingInformation | null;
 
     @Column("decimal", { precision: 10, scale: 2 })
     price: number;
@@ -186,6 +193,7 @@ export class Order {
 - `paymentReference` (VARCHAR 255, nullable) and `paidAt` (DATETIME, nullable) - Optional reference and server-generated payment timestamp
 - `invoiceIdentifier` (VARCHAR 100, nullable) and `invoiceIssuedAt` (DATETIME, nullable) - Optional invoice identifier and issuance timestamp
 - `isDelivered` (BOOLEAN, default false), `deliveredAt` (DATETIME, nullable), and `deliveryDocumentIdentifier` (VARCHAR 255, nullable) - Independent delivery state, timestamp, and optional document identifier
+- `billingInformationId` (INT, nullable) - Selected user-owned billing-information record
 - `completedAt` (DATETIME, nullable) - Set when payment, invoice issuance, and delivery have all been recorded
 - `items` (Relation) - OrderItem array with cascade delete
 - `status` (ENUM) - Current workflow status: `cart`, `order_placed`, or `completed`
@@ -209,7 +217,16 @@ Migration `1800000006000-order-fulfillment-states` adds nullable references/time
 
 **Relationships**:
 - Many-to-One: User
+- Many-to-One: BillingInformation (nullable; deletion restricted while referenced)
 - One-to-Many: OrderItems
+
+### 3. BillingInformation
+
+**Table**: `billing_information`
+
+Stores reusable billing addresses owned by users. It includes a generated ID, `userId`, `createdAt`, and `fullName`, optional `company`, `addressLine1`, optional `addressLine2`, `city`, optional `state`, `postalCode`, `country`, and optional `phone`. User-facing APIs scope every read and write to the authenticated owner. An address referenced by an order cannot be deleted.
+
+Migration `1800000008000-user-billing-information` creates this table, copies existing order JSON addresses into user-owned records and links those orders, then replaces `order.billingAddress` with nullable `order.billingInformationId`. Existing orders without a valid address remain unlinked; existing order/payment data is otherwise unchanged.
 
 ---
 
