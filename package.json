@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "test": "TS_NODE_TRANSPILE_ONLY=true node --import ts-node/register --test src/**/*.test.ts",
+    "test:coverage": "c8 --all --src src --include 'src/**/*.ts' --exclude '**/*.test.ts' --exclude '**/*.d.ts' --exclude '**/node_modules/**' --check-coverage --lines 30 --branches 54 --functions 59 --reporter=text --reporter=html -- env TS_NODE_TRANSPILE_ONLY=true node --import ts-node/register --test 'src/**/*.test.ts'",
     "start": "npx ts-node src/server.ts",
     "dev": "nodemon --exec ts-node --require dotenv/config src/server.ts",
     "migration:run": "ts-node --require dotenv/config node_modules/typeorm/cli.js migration:run -d src/data-source.ts",
@@ -48,6 +49,7 @@
     "@types/nodemailer": "^8.0.2",
     "@types/passport": "^1.0.17",
     "@types/passport-google-oauth20": "^2.0.16",
+    "c8": "^12.0.0",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"

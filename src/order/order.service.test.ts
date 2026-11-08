@@ -23,6 +23,78 @@ test('BusinessSettingService.normalizeShippingCost rejects negatives and malform
   assert.equal(BusinessSettingService.normalizeShippingCost('15.50'), 15.5);
 });
 
+test('BusinessSettingService creates defaults, honors free-shipping boundary, and updates existing values', async () => {
+  const settings = new Map<string, any>();
+  const repository: any = {
+    find: async () => Array.from(settings.values()),
+    findOneBy: async ({ key }: any) => settings.get(key) ?? null,
+    create: (value: any) => ({ ...value }),
+    save: async (setting: any) => { settings.set(setting.key, setting); return setting; },
+  };
+  const service = new BusinessSettingService(repository);
+
+  assert.equal(await service.getShippingCost(), 8);
+  assert.equal(await service.getFreeShippingThreshold(), 0);
+  assert.equal(await service.getShippingCostForSubtotal(100), 8);
+  await service.setFreeShippingThreshold('50.005');
+  await service.setShippingCost('12.345');
+  assert.equal(await service.getFreeShippingThreshold(), 50.01);
+  assert.equal(await service.getShippingCostForSubtotal(50.01), 0);
+  assert.equal(await service.getShippingCostForSubtotal(50), 12.35);
+  assert.equal((await service.getSettings()).length, 2);
+});
+
+test('BusinessSettingService propagates repository failures and rejects invalid thresholds', async () => {
+  const brokenRepository: any = { find: async () => { throw new Error('database unavailable'); } };
+  const service = new BusinessSettingService(brokenRepository);
+  await assert.rejects(service.getSettings(), /database unavailable/);
+  assert.throws(() => BusinessSettingService.normalizeFreeShippingThreshold('-1'));
+  assert.throws(() => BusinessSettingService.normalizeFreeShippingThreshold(''));
+});
+
+test('OrderService creates a cart with configured shipping, reuses existing carts, and rejects missing users', async () => {
+  const user = { id: 'user-1' } as any;
+  let existing: any = null;
+  const orderRepo: any = {
+    findOne: async () => existing,
+    create: (order: any) => order,
+    save: async (order: any) => order,
+  };
+  const service = new OrderService(
+    orderRepo, {} as any, {} as any,
+    { findOneBy: async () => user } as any,
+    {} as any,
+    { getShippingCostForSubtotal: async () => 9 } as any,
+  );
+
+  const created = await service.createOrder(user.id);
+  assert.equal(created.total, 9);
+  assert.equal(created.shippingCost, 9);
+  assert.deepEqual(created.items, []);
+  existing = created;
+  assert.equal(await service.createOrder(user.id), created);
+
+  const missingUserService = new OrderService(orderRepo, {} as any, {} as any, { findOneBy: async () => null } as any, {} as any);
+  await assert.rejects(missingUserService.createOrder('missing'), { message: 'User not found' });
+});
+
+test('OrderService applies the best supported user discount and ignores non-beneficial discounts', async () => {
+  const service = new OrderService(
+    {} as any, {} as any, {} as any, {} as any,
+    { listDiscountsByUser: async () => [
+      { type: 'percent', value: 10 },
+      { type: 'fixed', value: 15 },
+      { type: 'fixed', value: 5 },
+      { type: 'other', value: 90 },
+    ] } as any,
+  );
+  assert.equal(await service.applyDiscountsToPrice(1, 100, { id: 'user-1' } as any), 85);
+  (service as any).discountService.listDiscountsByUser = async () => [{ type: 'other', value: 100 }];
+  assert.equal(await service.applyDiscountsToPrice(1, 100, { id: 'user-1' } as any), null);
+  (service as any).discountService.listDiscountsByUser = async () => [];
+  assert.equal(await service.applyDiscountsToPrice(1, 100, { id: 'user-1' } as any), null);
+});
+
 function createResponse() {
   const response: any = {};
   const res: any = {
@@ -692,4 +764,76 @@ test('admin completion controller returns conflict when fulfillment is incomplet
 
   assert.equal(response.status, 409);
   assert.match(response.body.message, /payment, invoice issuance, and delivery/);
+});
+
+test('order controller covers missing users, validation, coupon, and checkout error mapping', async () => {
+  const controller = new OrderController({ findOne: async () => null } as any, {} as any, {} as any, {} as any, {} as any);
+  (controller as any).orderService.updateItemQuantity = async () => null;
+  const missingUserResponse = createResponse();
+  await controller.clearCurrentCart({ entity: undefined } as any, missingUserResponse.res as any);
+  assert.equal(missingUserResponse.response.status, 401);
+
+  const quantityResponse = createResponse();
+  await controller.updateItemQuantityInOrder({ params: { itemId: '4' }, body: { quantity: 1.5 } } as any, quantityResponse.res as any);
+  assert.equal(quantityResponse.response.status, 400);
+  const notFoundResponse = createResponse();
+  await controller.updateItemQuantityInOrder({ params: { itemId: '4' }, body: { quantity: 2 } } as any, notFoundResponse.res as any);
+  assert.equal(notFoundResponse.response.status, 404);
+
+  const emptyCouponResponse = createResponse();
+  await controller.validateCoupon({ body: { code: ' ' } } as any, emptyCouponResponse.res as any);
+  assert.equal(emptyCouponResponse.response.status, 400);
+  const invalidCouponResponse = createResponse();
+  await controller.validateCoupon({ body: { code: 'expired' } } as any, invalidCouponResponse.res as any);
+  assert.equal(invalidCouponResponse.response.status, 400);
+
+  const checkoutErrors = ['ORDER_EMPTY', 'ORDER_NOT_IN_CART', 'INVALID_PAYMENT_METHOD', 'BILLING_INFORMATION_NOT_FOUND', 'unexpected'];
+  const expectedStatuses = [400, 409, 400, 404, 500];
+  for (let index = 0; index < checkoutErrors.length; index += 1) {
+    (controller as any).orderService.initiateCheckout = async () => { throw new Error(checkoutErrors[index]); };
+    const checkoutResponse = createResponse();
+    await controller.initiateCheckout({ params: { id: '1' }, entity: { id: 'user-1' }, body: {} } as any, checkoutResponse.res as any);
+    assert.equal(checkoutResponse.response.status, expectedStatuses[index]);
+  }
+});
+
+test('order controller maps admin listing, dashboard, fulfillment, and completion responses', async () => {
+  const createdAt = new Date('2026-01-01T00:00:00.000Z');
+  const order = { id: 2, user: { id: 'user-1' }, status: OrderStatus.ORDER_PLACED, total: '12', shippingCost: '3', createdAt, items: [] } as any;
+  const controller = new OrderController({} as any, {} as any, {} as any, {} as any, {} as any, undefined, {sendOrderConfirmation: async () => undefined} as any);
+  const service = (controller as any).orderService;
+
+  service.getOrdersByUser = async () => [];
+  const noOrders = createResponse();
+  await controller.getOrdersByUser({ entity: { id: 'user-1' } } as any, noOrders.res as any);
+  assert.equal(noOrders.response.status, 404);
+
+  service.getAllOrdersForAdmin = async () => [order];
+  const adminOrders = createResponse();
+  await controller.getAllOrdersForAdmin({} as any, adminOrders.res as any);
+  assert.equal(adminOrders.response.body.data[0].shippingCost, 3);
+
+  service.getAdminDashboardSummary = async () => ({ cartCount: 1, orderPlacedCount: 2, completedLast30DaysCount: 3 });
+  const dashboard = createResponse();
+  await controller.getAdminDashboardSummary({} as any, dashboard.res as any);
+  assert.equal(dashboard.response.body.data.completedLast30DaysCount, 3);
+
+  service.updateOrderFulfillment = async () => order;
+  const fulfillment = createResponse();
+  await controller.updateOrderFulfillment({ params: { id: '2' }, body: { paymentStatus: 'paid' } } as any, fulfillment.res as any);
+  assert.equal(fulfillment.response.status, 200);
+  service.updateOrderFulfillment = async () => null;
+  const missingFulfillment = createResponse();
+  await controller.updateOrderFulfillment({ params: { id: '2' }, body: {} } as any, missingFulfillment.res as any);
+  assert.equal(missingFulfillment.response.status, 404);
+
+  service.markOrderCompleted = async () => order;
+  const completed = createResponse();
+  await controller.markOrderCompleted({ params: { id: '2' }, body: {} } as any, completed.res as any);
+  assert.equal(completed.response.status, 200);
+  assert.equal(completed.response.body.data.id, 2);
+  service.markOrderCompleted = async () => null;
+  const missingCompletion = createResponse();
+  await controller.markOrderCompleted({ params: { id: '2' }, body: {} } as any, missingCompletion.res as any);
+  assert.equal(missingCompletion.response.status, 404);
 });
