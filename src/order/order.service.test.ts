@@ -206,6 +206,23 @@ test('admin order listing retrieves all users’ orders with dashboard relations
   assert.equal('where' in findOptions, false);
 });
 
+test('user order history excludes the active cart', async () => {
+  const completedOrder = { id: 2, status: OrderStatus.COMPLETED, items: [] } as any;
+  let findOptions: any;
+  const service = new OrderService(
+    { find: async (options: any) => { findOptions = options; return [completedOrder]; } } as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    { listDiscountsByUser: async () => [] } as any,
+  );
+
+  assert.deepEqual(await service.getOrdersByUser('user-1'), [completedOrder]);
+  assert.deepEqual(findOptions.where.user, { id: 'user-1' });
+  assert.equal(findOptions.where.status.type, 'not');
+  assert.equal(findOptions.where.status.value, OrderStatus.CART);
+});
+
 test('active cart refreshes shipping while completion keeps the cart snapshot', async () => {
   const order = {
     id: 123,

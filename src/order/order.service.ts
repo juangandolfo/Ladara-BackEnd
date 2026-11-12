@@ -1,4 +1,4 @@
-import {Between, Repository} from "typeorm";
+import {Between, Not, Repository} from "typeorm";
 import {Order} from "./entities/order.entity";
 import {OrderItem} from "./entities/order-item.entity";
 import {Product} from "../product/product.entity";
@@ -349,7 +349,7 @@ export class OrderService {
 
     async getOrdersByUser(userId: string): Promise<Order[]> {
         const orders = await this.orderRepo.find({
-            where: {user: {id: userId}},
+            where: {user: {id: userId}, status: Not(OrderStatus.CART)},
             relations: ["items", "items.product", "user", "billingInformation"],
             order: {createdAt: "DESC"}
         });
