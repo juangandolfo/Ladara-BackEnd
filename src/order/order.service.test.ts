@@ -817,7 +817,7 @@ test('order controller covers missing users, validation, coupon, and checkout er
 test('order controller maps admin listing, dashboard, fulfillment, and completion responses', async () => {
   const createdAt = new Date('2026-01-01T00:00:00.000Z');
   const order = { id: 2, user: { id: 'user-1' }, status: OrderStatus.ORDER_PLACED, total: '12', shippingCost: '3', createdAt, items: [] } as any;
-  const controller = new OrderController({} as any, {} as any, {} as any, {} as any, {} as any, undefined, {sendOrderConfirmation: async () => undefined} as any);
+  const controller = new OrderController({ findOne: async () => ({paymentStatus: 'unpaid'}) } as any, {} as any, {} as any, {} as any, {} as any, undefined, {sendOrderConfirmation: async () => undefined} as any);
   const service = (controller as any).orderService;
 
   service.getOrdersByUser = async () => [];

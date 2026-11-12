@@ -11,6 +11,9 @@ export class BusinessSetting {
     @Column("decimal", { precision: 10, scale: 2 })
     value: number;
 
+    @Column({type: "varchar", length: 128, nullable: true})
+    textValue: string | null;
+
     @Column({ type: "varchar", length: 255, nullable: true })
     description?: string;
 

@@ -8,7 +8,7 @@ Node.js/TypeScript, Express 5, TypeORM, and MySQL. `src/server.ts` initializes t
 
 `Express → route and middleware → controller → service → TypeORM repository → MySQL`
 
-Features are grouped by domain under `src/` (`auth`, `product`, `order`, `discount`, `billing-information`, `business-settings`). Routes apply validation and authentication; services implement business rules; entities define persistence; DTOs describe API data.
+Features are grouped by domain under `src/` (`auth`, `product`, `order`, `discount`, `billing-information`, `business-settings`, `analytics`). Routes apply validation and authentication; services implement business rules; entities define persistence; DTOs describe API data. Analytics stores activity events and reports from order/payment, product-category, billing-country, and business-setting data.
 
 ## Authentication
 
@@ -21,3 +21,7 @@ An order starts as a cart. Checkout associates the user's saved billing address 
 ## Persistence and checks
 
 TypeORM repositories access MySQL. Schema changes use migrations; automatic synchronization is disabled. Run `npm test` and `npm run build` after changes. Database scripts are listed in `package.json`.
+
+## Analytics
+
+Dashboard date boundaries are interpreted in the configurable IANA business timezone, while database timestamps remain UTC. Orders and items retain billing-country and category snapshots for stable historical reporting. Dashboard activity is best-effort audit data and does not block core business writes. Visitor/source/conversion analytics are intentionally not implemented until a frontend tracking contract exists.

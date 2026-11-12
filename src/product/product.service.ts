@@ -4,6 +4,7 @@ import {Product} from "./product.entity";
 import {User} from "../user/user.entity";
 import {DiscountService} from "../discount/discount.service";
 import {Discount} from "../discount/discount.entity";
+import {Category} from "./category.entity";
 
 export interface ProductFilters {
     id?: number;
@@ -34,10 +35,12 @@ export interface ProductFilterResult {
 export class ProductService {
     private productRepository: Repository<Product>;
     private discountService: DiscountService;
+    private categoryRepository: Repository<Category>;
 
     constructor() {
         this.productRepository = AppDataSource.getRepository(Product);
         this.discountService = new DiscountService(AppDataSource.getRepository(Discount));
+        this.categoryRepository = AppDataSource.getRepository(Category);
     }
 
     async filterProducts(filters: ProductFilters, userId: string): Promise<ProductFilterResult> {
@@ -202,7 +205,10 @@ export class ProductService {
 
     async createProduct(productData: Partial<Product>): Promise<Product> {
         try {
-            const product = this.productRepository.create(productData);
+            const categoryName = productData.category?.trim();
+            if (!categoryName) throw new Error("Category is required");
+            const category = await this.getOrCreateCategory(categoryName);
+            const product = this.productRepository.create({...productData, category: category.name, categoryId: category.id});
             return await this.productRepository.save(product);
         } catch (error) {
             throw new Error(`Error creating product: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -216,7 +222,14 @@ export class ProductService {
                 return null;
             }
 
-            await this.productRepository.update(id, productData);
+            const update = {...productData};
+            if (update.category !== undefined) {
+                if (!update.category.trim()) throw new Error("Category is required");
+                const category = await this.getOrCreateCategory(update.category.trim());
+                update.category = category.name;
+                (update as any).categoryId = category.id;
+            }
+            await this.productRepository.update(id, update);
             return await this.getProductById(id, false);
         } catch (error) {
             throw new Error(`Error updating product: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -258,6 +271,15 @@ export class ProductService {
         } catch (error) {
             throw new Error(`Error permanently deleting product: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
+    }
+
+    private async getOrCreateCategory(name: string): Promise<Category> {
+        let category = await this.categoryRepository.findOneBy({name});
+        if (!category) {
+            category = this.categoryRepository.create({name});
+            category = await this.categoryRepository.save(category);
+        }
+        return category;
     }
 
     async getDeletedProducts(): Promise<Product[]> {

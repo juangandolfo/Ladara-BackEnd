@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { AppDataSource } from '../data-source';
 import { Product } from '../product/product.entity';
+import { Category } from '../product/category.entity';
 import { User } from '../user/user.entity';
 import { BusinessSetting } from '../business-settings/business-setting.entity';
 import { v4 as uuidv4 } from 'uuid';
@@ -54,6 +55,7 @@ async function runSeeds() {
 
     // Seed Products
     const productRepository = AppDataSource.getRepository(Product);
+    const categoryRepository = AppDataSource.getRepository(Category);
     const existingProducts = await productRepository.count();
 
     if (existingProducts === 0) {
@@ -114,6 +116,11 @@ async function runSeeds() {
         },
       ];
 
+      for (const product of products) {
+        let category = await categoryRepository.findOneBy({ name: product.category });
+        if (!category) category = await categoryRepository.save(categoryRepository.create({ name: product.category }));
+        (product as Product).categoryId = category.id;
+      }
       await productRepository.save(products);
       console.log('✓ Products seeded:', products.length);
     } else {

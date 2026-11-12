@@ -25,6 +25,8 @@ import {
     updateOrderFulfillmentValidators,
     handleValidationErrors
 } from "./order.validators";
+import {AnalyticsEvent} from "../analytics/analytics-event.entity";
+import {AnalyticsEventService} from "../analytics/analytics-event.service";
 
 const discountService = new DiscountService(dataSource.getRepository(Discount));
 const businessSettingService = new BusinessSettingService(dataSource.getRepository(BusinessSetting));
@@ -38,7 +40,8 @@ const orderController = new OrderController(
     discountService,
     businessSettingService,
     emailService,
-    dataSource.getRepository(BillingInformation)
+    dataSource.getRepository(BillingInformation),
+    new AnalyticsEventService(dataSource.getRepository(AnalyticsEvent))
 );
 
 const checkoutController = new CheckoutController();

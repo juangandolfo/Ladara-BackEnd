@@ -20,6 +20,12 @@ export class OrderItem {
     @Column("int")
     quantity: number;
 
+    @Column({type: "int", nullable: true})
+    categoryIdSnapshot: number | null;
+
+    @Column({type: "varchar", length: 50, nullable: true})
+    categoryNameSnapshot: string | null;
+
     @Column("decimal", { precision: 10, scale: 2 })
     price: number;
 }

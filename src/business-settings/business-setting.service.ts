@@ -6,6 +6,9 @@ export class BusinessSettingService {
     private static readonly DEFAULT_FREE_SHIPPING_THRESHOLD = 0;
     private static readonly SHIPPING_COST_KEY = "shippingCost";
     private static readonly FREE_SHIPPING_THRESHOLD_KEY = "freeShippingThreshold";
+    private static readonly MONTHLY_SALES_TARGET_KEY = "monthlySalesTarget";
+    private static readonly TIMEZONE_KEY = "timezone";
+    private static readonly DEFAULT_TIMEZONE = "America/Montevideo";
 
     constructor(private readonly businessSettingRepository: Repository<BusinessSetting>) {
     }
@@ -41,6 +44,76 @@ export class BusinessSettingService {
         }
 
         return Number(parsed.toFixed(2));
+    }
+
+    static normalizeMonthlySalesTarget(value: string | number): number {
+        const rawValue = typeof value === "string" ? value.trim() : value;
+        if (rawValue === null || rawValue === undefined || rawValue === "") throw new Error("Monthly sales target is required");
+        const parsed = Number(rawValue);
+        if (!Number.isFinite(parsed) || parsed < 0 || parsed > 99999999.99 || !/^\d+(\.\d{1,2})?$/.test(String(rawValue))) {
+            throw new Error("Monthly sales target must be a non-negative amount with up to 2 decimal places");
+        }
+        return Number(parsed.toFixed(2));
+    }
+
+    static normalizeBusinessTimezone(value: string): string {
+        if (typeof value !== "string" || !value.trim()) throw new Error("Timezone is required");
+        const timezone = value.trim();
+        try {
+            new Intl.DateTimeFormat("en-US", {timeZone: timezone});
+        } catch {
+            throw new Error("Timezone must be a valid IANA timezone");
+        }
+        return timezone;
+    }
+
+    async getMonthlySalesTarget(): Promise<number | null> {
+        const setting = await this.getSetting(BusinessSettingService.MONTHLY_SALES_TARGET_KEY);
+        return setting ? Number(setting.value.toString()) : null;
+    }
+
+    async setMonthlySalesTarget(value: string | number): Promise<BusinessSetting> {
+        const normalized = BusinessSettingService.normalizeMonthlySalesTarget(value);
+        let setting = await this.getSetting(BusinessSettingService.MONTHLY_SALES_TARGET_KEY);
+        if (!setting) {
+            setting = this.businessSettingRepository.create({
+                key: BusinessSettingService.MONTHLY_SALES_TARGET_KEY,
+                value: normalized,
+                textValue: null,
+                description: "Current monthly sales target in UYU.",
+            });
+        } else {
+            setting.value = normalized;
+        }
+        return this.businessSettingRepository.save(setting);
+    }
+
+    async getBusinessTimezone(): Promise<string> {
+        const setting = await this.getSetting(BusinessSettingService.TIMEZONE_KEY);
+        if (setting?.textValue) return BusinessSettingService.normalizeBusinessTimezone(setting.textValue);
+        const created = await this.businessSettingRepository.save(this.businessSettingRepository.create({
+            key: BusinessSettingService.TIMEZONE_KEY,
+            value: 0,
+            textValue: BusinessSettingService.DEFAULT_TIMEZONE,
+            description: "IANA timezone used to interpret business reporting dates.",
+        }));
+        return BusinessSettingService.normalizeBusinessTimezone(created.textValue ?? BusinessSettingService.DEFAULT_TIMEZONE);
+    }
+
+    async setBusinessTimezone(value: string): Promise<BusinessSetting> {
+        const normalized = BusinessSettingService.normalizeBusinessTimezone(value);
+        let setting = await this.getSetting(BusinessSettingService.TIMEZONE_KEY);
+        if (!setting) {
+            setting = this.businessSettingRepository.create({
+                key: BusinessSettingService.TIMEZONE_KEY,
+                value: 0,
+                textValue: normalized,
+                description: "IANA timezone used to interpret business reporting dates.",
+            });
+        } else {
+            setting.textValue = normalized;
+        }
+        return this.businessSettingRepository.save(setting);
     }
 
     async getSettings(): Promise<BusinessSetting[]> {

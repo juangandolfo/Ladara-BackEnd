@@ -18,6 +18,7 @@ import {DiscountService} from "../discount/discount.service";
 import {BusinessSettingService} from "../business-settings/business-setting.service";
 import {EmailService, BillingDetails} from "../email/email.service";
 import {BillingInformation} from "../billing-information/billing-information.entity";
+import {AnalyticsEventService} from "../analytics/analytics-event.service";
 
 export class OrderController {
     private orderService: OrderService;
@@ -32,7 +33,8 @@ export class OrderController {
         private discountService: DiscountService,
         businessSettingService?: BusinessSettingService,
         private emailService: EmailService = new EmailService(),
-        billingInformationRepo?: Repository<BillingInformation>
+        billingInformationRepo?: Repository<BillingInformation>,
+        private readonly analyticsEventService?: AnalyticsEventService,
     ) {
         this.orderRepo = orderRepo;
         this.productRepo = productRepo;
@@ -187,6 +189,7 @@ export class OrderController {
                 return;
             }
             await this.emailService.sendOrderConfirmation(order, req.body?.billing || {});
+            await this.recordActivity("order.completed", "Pedido completado", (req.entity as User)?.name ?? null);
             const orderDto = this.transformOrderToDto(order);
             res.status(200).json({success: true, message: "Order completed successfully", data: orderDto});
         } catch (error) {
@@ -203,10 +206,16 @@ export class OrderController {
         res: Response,
     ): Promise<void> => {
         try {
+            const previousOrder = req.body.paymentStatus === "paid"
+                ? await this.orderRepo.findOne({where: {id: Number(req.params.id)}})
+                : null;
             const order = await this.orderService.updateOrderFulfillment(Number(req.params.id), req.body);
             if (!order) {
                 res.status(404).json({success: false, message: "Order not found"});
                 return;
+            }
+            if (req.body.paymentStatus === "paid" && previousOrder?.paymentStatus !== "paid") {
+                await this.recordActivity("order.payment_confirmed", "Pago confirmado", (req.entity as User)?.name ?? null);
             }
             const orderDto = this.transformOrderToDto(order);
             res.status(200).json({success: true, message: "Order fulfillment updated successfully", data: orderDto});
@@ -231,6 +240,7 @@ export class OrderController {
                 res.status(404).json({success: false, message: "Order not found"});
                 return;
             }
+            await this.recordActivity("order.placed", "Pedido realizado", null);
             const orderDto = this.transformOrderToDto(order);
             res.status(201).json({success: true, message: "Checkout details saved; payment has not been processed", data: orderDto});
         } catch (error) {
@@ -409,5 +419,13 @@ export class OrderController {
                 description: item.product.description
             } : undefined
         };
+    }
+
+    private async recordActivity(type: string, description: string, actorName: string | null): Promise<void> {
+        try {
+            await this.analyticsEventService?.record(type, description, actorName);
+        } catch {
+            // Dashboard activity must not affect core order operations.
+        }
     }
 }

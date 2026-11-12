@@ -56,6 +56,11 @@ export const DISCOUNT_ENDPOINTS = {
 export const BUSINESS_SETTING_ENDPOINTS = {
   shippingCost: '/api/settings/shipping-cost',
   freeShippingThreshold: '/api/settings/free-shipping-threshold',
+  monthlySalesTarget: '/api/settings/monthly-sales-target',
+  timezone: '/api/settings/timezone',
+} as const;
+export const ANALYTICS_ENDPOINTS = {
+  adminDashboard: '/api/analytics/admin/dashboard',
 } as const;
 
 export const HTTP_METHODS = { GET: 'GET', POST: 'POST', PUT: 'PUT', PATCH: 'PATCH', DELETE: 'DELETE', OPTIONS: 'OPTIONS' } as const;
@@ -139,5 +144,10 @@ export const ApiRoutes = {
   settings: {
     shippingCost: () => buildApiUrl(BUSINESS_SETTING_ENDPOINTS.shippingCost),
     freeShippingThreshold: () => buildApiUrl(BUSINESS_SETTING_ENDPOINTS.freeShippingThreshold),
+    monthlySalesTarget: () => buildApiUrl(BUSINESS_SETTING_ENDPOINTS.monthlySalesTarget),
+    timezone: () => buildApiUrl(BUSINESS_SETTING_ENDPOINTS.timezone),
+  },
+  analytics: {
+    adminDashboard: (params: { from: string; to: string }) => buildUrlWithQuery(ANALYTICS_ENDPOINTS.adminDashboard, params),
   },
 } as const;

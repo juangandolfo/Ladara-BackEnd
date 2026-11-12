@@ -1,4 +1,5 @@
-import { Column, DeleteDateColumn, Entity, PrimaryGeneratedColumn } from "typeorm";
+import { Column, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import {Category} from "./category.entity";
 
     @Entity()
     export class Product {
@@ -22,6 +23,13 @@ import { Column, DeleteDateColumn, Entity, PrimaryGeneratedColumn } from "typeor
 
         @Column({ length: 50, nullable: false })
         category: string;
+
+        @Column({type: "int", nullable: true})
+        categoryId: number | null;
+
+        @ManyToOne(() => Category, category => category.products, {nullable: true, onDelete: "RESTRICT"})
+        @JoinColumn({name: "categoryId"})
+        categoryEntity: Category | null;
 
         @Column({ length: 255, nullable: false })
         image: string;

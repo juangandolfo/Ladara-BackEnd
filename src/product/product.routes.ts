@@ -12,9 +12,11 @@ import {createAuthorizeMiddleware} from "../middlewares/auth.middleware";
 import {UserService} from "../user/user.service";
 import {AppDataSource as dataSource} from "../data-source";
 import {User} from "../user/user.entity";
+import {AnalyticsEvent} from "../analytics/analytics-event.entity";
+import {AnalyticsEventService} from "../analytics/analytics-event.service";
 
 const router = Router();
-const productController = new ProductController();
+const productController = new ProductController(new AnalyticsEventService(dataSource.getRepository(AnalyticsEvent)));
 
 const authorize = createAuthorizeMiddleware(new UserService(dataSource.getRepository(User)));
 const adminOnly = [authorize, checkAdminMiddleware];

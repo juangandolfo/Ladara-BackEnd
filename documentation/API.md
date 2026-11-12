@@ -21,8 +21,8 @@ Most JSON responses use `{ success, message?, data?, ... }`, but response shapes
 | `GET /categories` | Public | Category list in `data`. |
 | `GET /` | Admin | All products in `data`. |
 | `GET /deleted` | Admin | Deleted products in `data`. |
-| `POST /` | Admin | Create product; returns it in `data`. Requires `name`, `price`, `stock`, `category`; optional `description`, `code`, `image`. |
-| `PUT /:id` | Admin | Partial update; returns product in `data`. |
+| `POST /` | Admin | Create product; returns it in `data`. Requires `name`, `price`, `stock`, `category`; optional `description`, `code`, `image`. Category names are mapped to stable `categoryId` values. |
+| `PUT /:id` | Admin | Partial update; returns product in `data`, including `categoryId`. |
 | `DELETE /:id` | Admin | Soft-delete product. |
 | `DELETE /:id/permanent` | Admin | Permanently delete product. |
 | `POST /:id/restore` | Admin | Restore deleted product. |
@@ -75,6 +75,18 @@ Required body fields: `fullName`, `addressLine1`, `city`, `postalCode`, `country
 | `PUT /shipping-cost` | Admin | Body `{ shippingCost }` or `{ value }`. |
 | `GET /free-shipping-threshold` | Bearer token | Returns `{ key, value }`; zero disables threshold. |
 | `PUT /free-shipping-threshold` | Admin | Body `{ freeShippingThreshold }` or `{ value }`. |
+| `GET /monthly-sales-target` | Bearer token | Returns `{ key: "monthlySalesTarget", value }`; value is `null` until configured. |
+| `PUT /monthly-sales-target` | Admin | Body `{ amount }`; non-negative UYU amount with up to 2 decimals. |
+| `GET /timezone` | Bearer token | Returns `{ key: "timezone", value }`; default is `America/Montevideo`. |
+| `PUT /timezone` | Admin | Body `{ timezone }`; must be a valid IANA timezone. |
+
+## Admin analytics — `/api/analytics`
+
+| Method and path | Access | Purpose / output |
+|---|---|---|
+| `GET /admin/dashboard?from=YYYY-MM-DD&to=YYYY-MM-DD` | Admin | Returns sales, daily revenue, monthly target progress, sales by historical category, active buyers by billing country, and up to 20 recent activity events. |
+
+Dates are inclusive business-calendar dates interpreted in the configured timezone; timestamps are stored in UTC. Maximum range is 366 days. Sales count orders currently marked paid with `paidAt` in the range and use persisted order totals (tax and shipping included). Changing a paid order back to unpaid removes it from the current-state report; payment reversals are not historically journaled. Target achievement uses the latest configured target against confirmed revenue for the requested range. Visitors, conversion and traffic sources are not reported until real analytics instrumentation exists; do not infer them from orders. See [frontend dashboard contract](./frontend-contracts/admin-dashboard-analytics.md) for response fields and calculation details.
 
 ## Discounts — `/api/discounts`
 

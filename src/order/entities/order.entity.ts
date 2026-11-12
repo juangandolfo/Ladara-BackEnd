@@ -25,6 +25,9 @@ export class Order {
     @JoinColumn({name: "billingInformationId"})
     billingInformation: BillingInformation | null;
 
+    @Column({type: "varchar", length: 100, nullable: true})
+    billingCountrySnapshot: string | null;
+
     @Column({ type: "varchar", length: 50, nullable: true })
     paymentMethod: string | null;
 

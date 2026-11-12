@@ -1,11 +1,13 @@
 import {Request, Response} from 'express';
 import {ProductService} from './product.service';
 import {ProductFilterDto, CreateProductDto, UpdateProductDto} from "../dtos/product.dto";
+import {AnalyticsEventService} from "../analytics/analytics-event.service";
+import {User} from "../user/user.entity";
 
 export class ProductController {
     private productService: ProductService;
 
-    constructor() {
+    constructor(private readonly analyticsEventService?: AnalyticsEventService) {
         this.productService = new ProductService();
     }
 
@@ -198,6 +200,7 @@ export class ProductController {
         try {
             const productData = req.body as CreateProductDto;
             const product = await this.productService.createProduct(productData);
+            await this.recordActivity("product.created", "Producto creado", req.entity as User | undefined);
 
             res.status(201).json({
                 success: true,
@@ -246,6 +249,7 @@ export class ProductController {
                 });
                 return;
             }
+            await this.recordActivity("product.updated", "Producto actualizado", req.entity as User | undefined);
 
             res.status(200).json({
                 success: true,
@@ -292,6 +296,7 @@ export class ProductController {
                 });
                 return;
             }
+            await this.recordActivity("product.deleted", "Producto eliminado", req.entity as User | undefined);
 
             res.status(200).json({
                 success: true,
@@ -333,10 +338,11 @@ export class ProductController {
             if (!restored) {
                 res.status(404).json({
                     success: false,
-                    message: 'Product not found in deleted state'
+                    message: 'Product not found or not deleted'
                 });
                 return;
             }
+            await this.recordActivity("product.updated", "Producto restaurado", req.entity as User | undefined);
 
             res.status(200).json({
                 success: true,
@@ -382,6 +388,7 @@ export class ProductController {
                 });
                 return;
             }
+            await this.recordActivity("product.deleted", "Producto eliminado permanentemente", req.entity as User | undefined);
 
             res.status(200).json({
                 success: true,
@@ -395,4 +402,12 @@ export class ProductController {
             });
         }
     };
+
+    private async recordActivity(type: string, description: string, actor?: User): Promise<void> {
+        try {
+            await this.analyticsEventService?.record(type, description, actor?.isAdmin ? actor.name : null);
+        } catch {
+            // Dashboard activity must not affect core product operations.
+        }
+    }
 }

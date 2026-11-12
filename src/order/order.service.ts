@@ -579,9 +579,14 @@ export class OrderService {
         }
 
         order.billingInformation = billingInformation;
+        order.billingCountrySnapshot = billingInformation.country;
         order.paymentMethod = normalizedPaymentMethod;
         order.checkoutAt = new Date();
         order.status = OrderStatus.ORDER_PLACED;
+        for (const item of order.items ?? []) {
+            item.categoryIdSnapshot = item.product?.categoryId ?? null;
+            item.categoryNameSnapshot = item.product?.category ?? null;
+        }
         order.total = await this.calculateOrderTotal(order);
         return this.orderRepo.save(order);
     }

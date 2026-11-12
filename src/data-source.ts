@@ -7,6 +7,8 @@ import {OrderItem} from "./order/entities/order-item.entity";
 import {Discount} from "./discount/discount.entity";
 import {BusinessSetting} from "./business-settings/business-setting.entity";
 import {BillingInformation} from "./billing-information/billing-information.entity";
+import {Category} from "./product/category.entity";
+import {AnalyticsEvent} from "./analytics/analytics-event.entity";
 
 dotenv.config();
 
@@ -21,7 +23,7 @@ export const AppDataSource = new DataSource({
     // synchronization can invalidate existing order statuses during deploys.
     synchronize: false,
     logging: true,
-    entities: [Product, User, Order, OrderItem, Discount, BusinessSetting, BillingInformation],
+    entities: [Product, Category, User, Order, OrderItem, Discount, BusinessSetting, BillingInformation, AnalyticsEvent],
     migrations: [`${__dirname}/../db/migrations/*.ts`],
     subscribers: [],
 });

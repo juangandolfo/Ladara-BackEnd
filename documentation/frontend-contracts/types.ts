@@ -6,7 +6,7 @@ export enum DiscountType { FIXED = 'fixed', PERCENT = 'percent' }
 export interface User { id: string; name: string; isAdmin: boolean; }
 export interface AuthResponse { user: User; token: string; }
 export interface TokenPayload { id: string; name: string; iat: number; exp: number; }
-export interface Product { id: number; name: string; price: number; description?: string; code?: string; stock: number; category: string; image: string; deletedAt?: Date | null; discountedPrice?: number; }
+export interface Product { id: number; name: string; price: number; description?: string; code?: string; stock: number; category: string; categoryId?: number | null; image: string; deletedAt?: Date | null; discountedPrice?: number; }
 export interface ProductFilterDto { id?: number; name?: string; description?: string; code?: string; price?: number; minPrice?: number; maxPrice?: number; stock?: number; minStock?: number; maxStock?: number; category?: string; sortBy?: 'id' | 'name' | 'price' | 'description' | 'code' | 'stock'; sortOrder?: 'ASC' | 'DESC'; limit?: number; offset?: number; includeDeleted?: boolean; }
 export interface CreateProductDto { name: string; price: number; category: string; image: string; description?: string; code?: string; stock?: number; }
 export interface UpdateProductDto { name?: string; price?: number; description?: string; code?: string; stock?: number; category?: string; image?: string; }
@@ -20,6 +20,16 @@ export interface BillingInformationInput extends BillingAddress {}
 export interface CheckoutOrderDto { billingInformationId: number; paymentMethod: OrderPaymentMethod; }
 export interface OrderFulfillmentUpdateDto { paymentStatus?: OrderPaymentStatus; paymentReference?: string | null; invoiceIssued?: boolean; invoiceIdentifier?: string | null; isDelivered?: boolean; deliveryDocumentIdentifier?: string | null; }
 export interface AdminOrderDashboardSummary { cartCount: number; orderPlacedCount: number; completedLast30DaysCount: number; }
+export interface AdminAnalyticsDashboard {
+	period: { from: string; to: string; timezone: string };
+	sales: { currency: 'UYU'; confirmedRevenue: number; paidOrderCount: number };
+	revenueByDay: Array<{ date: string; revenue: number; paidOrderCount: number }>;
+	monthlyTarget: { amount: number | null; achievedAmount: number; completionPercent: number | null };
+	categorySales: Array<{ categoryId: number; categoryName: string; revenue: number; unitsSold: number; sharePercent: number }>;
+	activeUsersByCountry: Array<{ country: string | null; userCount: number; sharePercent: number }>;
+	recentActivity: Array<{ id: string; type: string; description: string; createdAt: string; actorName: string | null }>;
+}
+export interface BusinessSettingValue<T> { key: string; value: T; }
 export interface AddItemToOrderDto { productId: number; quantity: number; }
 export interface UpdateItemQuantityDto { quantity: number; }
 export interface Response<T> { success: boolean; message?: string; data?: T; error?: string; }

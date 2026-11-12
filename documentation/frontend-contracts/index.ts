@@ -17,5 +17,5 @@ export * from './errors';
 // VERSION
 // ============================================
 
-export const CONTRACTS_VERSION = '1.0.0';
-export const LAST_UPDATED = '2026-08-18';
+export const CONTRACTS_VERSION = '1.1.0';
+export const LAST_UPDATED = '2026-11-12';
