@@ -1,23 +1,26 @@
-# Ladara-BackEnd
+# Ladara Backend
 
-# Convetions
-- Use `nombre-archivo` for files
-- 
+TypeScript/Express API for Ladara's product catalog, carts and orders, billing information, discounts, and business settings.
 
+## Run locally
 
-# Horizontal arquitecture (by feature)
-As we are using a horizontal architecture, we will have the following structure:
-- entityA
-  - entityA.controller.ts
-  - entityA.service.ts
-  - entityA.repository.ts
-  - entityA.validators.ts
+1. Install dependencies: `npm install`.
+2. Configure MySQL and `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `SECRET_JWT_KEY`. `PORT` and `CALLBACK_URL` are optional.
+3. Apply migrations: `npm run migration:run`.
+4. Start the server: `npm run dev` (default port `3000`).
 
+## Checks
 
-# git 
- - feat/create-productds 
- - fix/bug-fix-description
- - refactor/rename-variable
+- `npm test` — run tests
+- `npm run test:coverage` — tests with coverage thresholds
+- `npm run build` — compile TypeScript
+
+## Documentation
+
+- [Architecture](documentation/ARCHITECTURE.md)
+- [API reference](documentation/API.md)
+- [Agent instructions](.github/copilot-instructions.md)
+- [Frontend contracts package](documentation/frontend-contracts/README.md)
 
 
 
