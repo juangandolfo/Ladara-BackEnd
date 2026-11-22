@@ -8,6 +8,7 @@ import {OrderStatus} from "./types/order-status.type";
 import {BusinessSettingService} from "../business-settings/business-setting.service";
 import {OrderFulfillmentUpdateDto} from "../dtos/order.dto";
 import {BillingInformation} from "../billing-information/billing-information.entity";
+import {sanitizePrice, sanitizeString} from "../common/normalize";
 
 export type CartItemInput = {
     id?: number | string;
@@ -39,11 +40,11 @@ export class OrderService {
     }
 
     static calculateCartTotal(subtotal: number, discountAmount: number, taxAmount: number, shippingCost: number): number {
-        const normalizedSubtotal = Number(subtotal.toFixed(2));
-        const normalizedDiscount = Number(discountAmount.toFixed(2));
-        const normalizedTax = Number(taxAmount.toFixed(2));
-        const normalizedShipping = Number(Math.max(0, shippingCost).toFixed(2));
-        return Number((normalizedSubtotal - normalizedDiscount + normalizedTax + normalizedShipping).toFixed(2));
+        const normalizedSubtotal = sanitizePrice(subtotal);
+        const normalizedDiscount = sanitizePrice(discountAmount);
+        const normalizedTax = sanitizePrice(taxAmount);
+        const normalizedShipping = sanitizePrice(Math.max(0, shippingCost));
+        return sanitizePrice(normalizedSubtotal - normalizedDiscount + normalizedTax + normalizedShipping);
     }
 
     static getCartItemKey(item: CartItemInput): string {
@@ -68,13 +69,13 @@ export class OrderService {
 
         const productId = item.product_id ?? item.productId;
         const sellerId = item.seller_id ?? item.sellerId;
-        const quantity = Number(String(item.quantity ?? "").trim());
-        const unitPrice = Number(String(item.unit_price ?? item.price ?? 0).trim());
+        const quantity = Number(sanitizeString(item.quantity));
+        const unitPrice = Number(sanitizeString(item.unit_price ?? item.price ?? 0));
 
-        if (productId === undefined || productId === null || String(productId).trim() === "") {
+        if (productId === undefined || productId === null || sanitizeString(productId) === "") {
             throw new Error("product_id is required");
         }
-        if (sellerId === undefined || sellerId === null || String(sellerId).trim() === "") {
+        if (sellerId === undefined || sellerId === null || sanitizeString(sellerId) === "") {
             throw new Error("seller_id is required");
         }
         if (!Number.isFinite(quantity) || !Number.isInteger(quantity) || quantity < 1) {
@@ -84,16 +85,17 @@ export class OrderService {
             throw new Error("unit_price must be a valid non-negative number");
         }
 
+        const normalizedPrice = sanitizePrice(unitPrice);
         const normalized: CartItemInput = {
             ...item,
-            product_id: Number(String(productId).trim()),
-            productId: Number(String(productId).trim()),
-            seller_id: String(sellerId).trim(),
-            sellerId: String(sellerId).trim(),
+            product_id: Number(sanitizeString(productId)),
+            productId: Number(sanitizeString(productId)),
+            seller_id: sanitizeString(sellerId),
+            sellerId: sanitizeString(sellerId),
             quantity: Number(quantity),
-            unit_price: Number(unitPrice.toFixed(2)),
-            price: Number(unitPrice.toFixed(2)),
-            subtotal: Number((Number(quantity) * Number(unitPrice.toFixed(2))).toFixed(2)),
+            unit_price: normalizedPrice,
+            price: normalizedPrice,
+            subtotal: sanitizePrice(Number(quantity) * normalizedPrice),
         };
 
         if (item.variant_id !== undefined || item.variantId !== undefined) {
@@ -117,13 +119,13 @@ export class OrderService {
                     existing.quantity = Number(existing.quantity) + Number(normalized.quantity);
                     existing.unit_price = existing.unit_price ?? normalized.unit_price;
                     existing.price = existing.price ?? normalized.unit_price;
-                    existing.subtotal = Number((Number(existing.quantity) * Number(existing.unit_price ?? 0)).toFixed(2));
+                    existing.subtotal = sanitizePrice(Number(existing.quantity) * Number(existing.unit_price ?? 0));
                     continue;
                 }
 
                 merged.set(key, {
                     ...normalized,
-                    subtotal: Number((Number(normalized.quantity) * Number(normalized.unit_price ?? 0)).toFixed(2)),
+                    subtotal: sanitizePrice(Number(normalized.quantity) * Number(normalized.unit_price ?? 0)),
                 });
             }
         }
@@ -140,13 +142,13 @@ export class OrderService {
         if (existingIndex >= 0) {
             const existingItem = nextItems[existingIndex];
             existingItem.quantity = Number(existingItem.quantity) + Number(normalized.quantity);
-            existingItem.subtotal = Number((Number(existingItem.quantity) * Number(existingItem.unit_price ?? 0)).toFixed(2));
+            existingItem.subtotal = sanitizePrice(Number(existingItem.quantity) * Number(existingItem.unit_price ?? 0));
             return nextItems;
         }
 
         const itemToAdd: CartItemInput = {
             ...normalized,
-            subtotal: Number((Number(normalized.quantity) * Number(normalized.unit_price ?? 0)).toFixed(2)),
+            subtotal: sanitizePrice(Number(normalized.quantity) * Number(normalized.unit_price ?? 0)),
         };
         nextItems.push(itemToAdd);
         return nextItems;
@@ -161,7 +163,7 @@ export class OrderService {
         return {
             uniqueItemCount: uniqueKeys.size,
             totalUnitCount,
-            subtotal: Number(subtotal.toFixed(2)),
+            subtotal: sanitizePrice(subtotal),
         };
     }
 
@@ -191,7 +193,7 @@ export class OrderService {
         }
 
         nextItems[targetIndex].quantity = finalQuantity;
-        nextItems[targetIndex].subtotal = Number((finalQuantity * Number(nextItems[targetIndex].unit_price ?? nextItems[targetIndex].price ?? 0)).toFixed(2));
+        nextItems[targetIndex].subtotal = sanitizePrice(finalQuantity * Number(nextItems[targetIndex].unit_price ?? nextItems[targetIndex].price ?? 0));
 
         return { items: nextItems, warning };
     }
@@ -212,9 +214,9 @@ export class OrderService {
             active?: boolean;
         } = {},
     ): { discountAmount: number; description: string } {
-        const normalizedCode = String(promoCode ?? "").trim();
+        const normalizedCode = sanitizeString(promoCode);
         const definition = { ...promo, code: promo.code ?? normalizedCode };
-        const resolvedCode = String(definition.code ?? "").trim().toUpperCase();
+        const resolvedCode = sanitizeString(definition.code, {uppercase: true});
 
         if (!normalizedCode || !resolvedCode || normalizedCode.toUpperCase() !== resolvedCode) {
             throw new Error("The promotional code you entered is invalid or expired");
@@ -237,7 +239,7 @@ export class OrderService {
             throw new Error("The promotional code you entered is invalid or expired");
         }
 
-        const discountType = String(definition.discountType ?? "percent").toLowerCase();
+        const discountType = sanitizeString(definition.discountType ?? "percent").toLowerCase();
         const discountValue = Number(definition.value ?? 0);
 
         if (!Number.isFinite(discountValue) || discountValue <= 0) {
@@ -246,9 +248,9 @@ export class OrderService {
 
         let discountAmount = 0;
         if (discountType === "percent") {
-            discountAmount = Number(((Number(subtotal) * discountValue) / 100).toFixed(2));
+            discountAmount = sanitizePrice((Number(subtotal) * discountValue) / 100);
         } else if (discountType === "fixed") {
-            discountAmount = Number(Math.min(Number(subtotal), discountValue).toFixed(2));
+            discountAmount = sanitizePrice(Math.min(Number(subtotal), discountValue));
         } else {
             throw new Error("The promotional code you entered is invalid or expired");
         }
@@ -525,11 +527,11 @@ export class OrderService {
             order.paidAt = update.paymentStatus === "paid" ? (order.paidAt ?? updatedAt) : null;
         }
         if (update.paymentReference !== undefined) {
-            order.paymentReference = update.paymentReference === null ? null : update.paymentReference.trim();
+            order.paymentReference = update.paymentReference === null ? null : sanitizeString(update.paymentReference);
         }
 
         if (update.invoiceIdentifier !== undefined) {
-            order.invoiceIdentifier = update.invoiceIdentifier === null ? null : update.invoiceIdentifier.trim();
+            order.invoiceIdentifier = update.invoiceIdentifier === null ? null : sanitizeString(update.invoiceIdentifier);
             if (order.invoiceIdentifier && !order.invoiceIssuedAt) {
                 order.invoiceIssuedAt = updatedAt;
             }
@@ -548,7 +550,7 @@ export class OrderService {
         if (update.deliveryDocumentIdentifier !== undefined) {
             order.deliveryDocumentIdentifier = update.deliveryDocumentIdentifier === null
                 ? null
-                : update.deliveryDocumentIdentifier.trim();
+                : sanitizeString(update.deliveryDocumentIdentifier);
         }
 
         this.synchronizeCompletionStatus(order);
@@ -612,17 +614,17 @@ export class OrderService {
 
         for (const item of items) {
             const originalPrice = Number(item.price);
-            itemSubtotal += Number((originalPrice * item.quantity).toFixed(2));
+            itemSubtotal += sanitizePrice(originalPrice * item.quantity);
 
             if (order.user && item.product) {
                 const discountedPrice = await this.applyDiscountsToPrice(item.product.id, originalPrice, order.user);
                 if (discountedPrice !== null) {
-                    discountAmount += Number(((originalPrice - discountedPrice) * item.quantity).toFixed(2));
+                    discountAmount += sanitizePrice((originalPrice - discountedPrice) * item.quantity);
                 }
             }
         }
 
-        const taxAmount = Number((itemSubtotal * 0.08).toFixed(2));
+        const taxAmount = sanitizePrice(itemSubtotal * 0.08);
         if (order.status === OrderStatus.CART) {
             order.shippingCost = await this.getCurrentShippingCost(itemSubtotal);
         }
