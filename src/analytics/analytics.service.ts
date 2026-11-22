@@ -1,7 +1,6 @@
-import {Not, Raw, Repository} from "typeorm";
+import {And, LessThan, MoreThanOrEqual, Repository} from "typeorm";
 import {BusinessSettingService} from "../business-settings/business-setting.service";
 import {Order} from "../order/entities/order.entity";
-import {OrderStatus} from "../order/types/order-status.type";
 import {AnalyticsEvent} from "./analytics-event.entity";
 
 const MAX_PERIOD_DAYS = 366;
@@ -34,13 +33,8 @@ function parseCalendarDate(value: string): {year: number; month: number; day: nu
     return {year, month, day, epoch};
 }
 
-function localMidnightToUtc(date: {year: number; month: number; day: number}, timezone: string): Date {
+function localMidnightToUtc(date: {year: number; month: number; day: number}, formatter: Intl.DateTimeFormat): Date {
     const target = Date.UTC(date.year, date.month - 1, date.day);
-    const formatter = new Intl.DateTimeFormat("en-CA", {
-        timeZone: timezone,
-        year: "numeric", month: "2-digit", day: "2-digit",
-        hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
-    });
     let candidate = target;
     for (let attempt = 0; attempt < 4; attempt++) {
         const parts = Object.fromEntries(formatter.formatToParts(new Date(candidate)).map(part => [part.type, part.value]));
@@ -50,14 +44,6 @@ function localMidnightToUtc(date: {year: number; month: number; day: number}, ti
         candidate += adjustment;
     }
     return new Date(candidate);
-}
-
-function dateInTimezone(value: Date, timezone: string): string {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-        timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
-    }).formatToParts(value);
-    const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
-    return `${values.year}-${values.month}-${values.day}`;
 }
 
 function roundMoney(value: number): number {
@@ -81,6 +67,15 @@ function normalizeCountry(value: unknown): string | null {
     return aliases[normalized] ?? null;
 }
 
+function reportDate(value: unknown): string {
+    return value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+}
+
+function toNumber(value: unknown): number {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
+}
+
 export class AnalyticsService {
     constructor(
         private readonly orderRepository: Repository<Order>,
@@ -98,29 +93,93 @@ export class AnalyticsService {
         const timezone = await this.settingsService.getBusinessTimezone();
         // Validate the configured IANA zone before building a query.
         new Intl.DateTimeFormat("en-US", {timeZone: timezone});
-        const start = localMidnightToUtc(fromDate, timezone);
+        const businessDateFormatter = new Intl.DateTimeFormat("en-CA", {
+            timeZone: timezone,
+            year: "numeric", month: "2-digit", day: "2-digit",
+            hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+        });
+        const start = localMidnightToUtc(fromDate, businessDateFormatter);
         const afterEndDate = new Date(toDate.epoch + 86_400_000);
         const endExclusive = localMidnightToUtc({
             year: afterEndDate.getUTCFullYear(),
             month: afterEndDate.getUTCMonth() + 1,
             day: afterEndDate.getUTCDate(),
-        }, timezone);
-        const periodWhere = () => Raw(alias => `${alias} >= :periodStart AND ${alias} < :periodEnd`, {
-            periodStart: start,
-            periodEnd: endExclusive,
-        });
+        }, businessDateFormatter);
 
-        const [paidOrders, placedOrders, events, target] = await Promise.all([
-            this.orderRepository.find({
-                where: {paymentStatus: "paid", paidAt: periodWhere()},
-                relations: ["items"],
-            }),
-            this.orderRepository.find({
-                where: {status: Not(OrderStatus.CART), checkoutAt: periodWhere()},
-                relations: ["user", "billingInformation"],
-            }),
+        const dayBuckets: Array<{date: string; start: Date; end: Date}> = [];
+        for (let day = fromDate.epoch; day <= toDate.epoch; day += 86_400_000) {
+            const date = new Date(day);
+            const nextDate = new Date(day + 86_400_000);
+            dayBuckets.push({
+                date: date.toISOString().slice(0, 10),
+                start: localMidnightToUtc({year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate()}, businessDateFormatter),
+                end: localMidnightToUtc({year: nextDate.getUTCFullYear(), month: nextDate.getUTCMonth() + 1, day: nextDate.getUTCDate()}, businessDateFormatter),
+            });
+        }
+        const dayBucketSql = dayBuckets.map(() => "SELECT CAST(? AS DATE) AS reportDate, CAST(? AS DATETIME) AS startsAt, CAST(? AS DATETIME) AS endsAt").join(" UNION ALL ");
+        const dailyRevenueSql = `
+            SELECT dayBuckets.reportDate AS date,
+                   COALESCE(SUM(o.total), 0) AS revenue,
+                   COUNT(o.id) AS paidOrderCount
+            FROM (${dayBucketSql}) dayBuckets
+            LEFT JOIN \`order\` o
+              ON o.paymentStatus = 'paid'
+             AND o.paidAt >= dayBuckets.startsAt
+             AND o.paidAt < dayBuckets.endsAt
+            GROUP BY dayBuckets.reportDate
+            ORDER BY dayBuckets.reportDate ASC`;
+        const dayBucketParams = dayBuckets.flatMap(bucket => [bucket.date, bucket.start, bucket.end]);
+        const paidOrdersParams = ["paid", start, endExclusive];
+        const [dailyRows, categoryRows, countryRows, events, target] = await Promise.all([
+            this.orderRepository.query(dailyRevenueSql, dayBucketParams),
+            this.orderRepository.query(`
+                WITH paid_orders AS (
+                    SELECT id, total
+                    FROM \`order\`
+                    WHERE paymentStatus = ? AND paidAt >= ? AND paidAt < ?
+                ), line_groups AS (
+                    SELECT item.orderId,
+                           item.categoryIdSnapshot AS categoryId,
+                           item.categoryNameSnapshot AS categoryName,
+                           SUM(item.price * item.quantity) AS categorySubtotal,
+                           SUM(item.quantity) AS unitsSold
+                    FROM order_item item
+                    INNER JOIN paid_orders paid ON paid.id = item.orderId
+                    WHERE item.categoryIdSnapshot IS NOT NULL
+                      AND item.categoryNameSnapshot IS NOT NULL
+                    GROUP BY item.orderId, item.categoryIdSnapshot, item.categoryNameSnapshot
+                ), order_subtotals AS (
+                    SELECT item.orderId, SUM(item.price * item.quantity) AS orderSubtotal
+                    FROM order_item item
+                    INNER JOIN paid_orders paid ON paid.id = item.orderId
+                    GROUP BY item.orderId
+                )
+                SELECT paid.id AS orderId,
+                       paid.total AS orderTotal,
+                       subtotal.orderSubtotal AS orderSubtotal,
+                       category_lines.categoryId,
+                       category_lines.categoryName,
+                       category_lines.categorySubtotal,
+                       category_lines.unitsSold
+                FROM paid_orders paid
+                INNER JOIN line_groups category_lines ON category_lines.orderId = paid.id
+                INNER JOIN order_subtotals subtotal ON subtotal.orderId = paid.id
+                ORDER BY paid.id ASC, category_lines.categoryId ASC`, paidOrdersParams),
+            this.orderRepository.query(`
+                SELECT latest.country, COUNT(*) AS userCount
+                FROM (
+                    SELECT customerOrders.userId,
+                           customerOrders.billingCountrySnapshot AS country,
+                           ROW_NUMBER() OVER (PARTITION BY customerOrders.userId ORDER BY customerOrders.checkoutAt DESC, customerOrders.id DESC) AS rowNumber
+                    FROM \`order\` customerOrders
+                    WHERE customerOrders.status <> ?
+                      AND customerOrders.checkoutAt >= ?
+                      AND customerOrders.checkoutAt < ?
+                ) latest
+                WHERE latest.rowNumber = 1
+                GROUP BY latest.country`, ["cart", start, endExclusive]),
             this.eventRepository.find({
-                where: {createdAt: periodWhere()},
+                where: {createdAt: And(MoreThanOrEqual(start), LessThan(endExclusive))},
                 order: {createdAt: "DESC"},
                 take: 20,
             }),
@@ -128,69 +187,50 @@ export class AnalyticsService {
         ]);
 
         const revenueByDate = new Map<string, {revenue: number; paidOrderCount: number}>();
-        for (let day = fromDate.epoch; day <= toDate.epoch; day += 86_400_000) {
-            revenueByDate.set(new Date(day).toISOString().slice(0, 10), {revenue: 0, paidOrderCount: 0});
+        for (const row of dailyRows) {
+            revenueByDate.set(reportDate(row.date), {revenue: roundMoney(toNumber(row.revenue)), paidOrderCount: toNumber(row.paidOrderCount)});
         }
-
-        let confirmedRevenue = 0;
+        const confirmedRevenue = roundMoney([...revenueByDate.values()].reduce((sum, day) => sum + day.revenue, 0));
+        const paidOrderCount = [...revenueByDate.values()].reduce((sum, day) => sum + day.paidOrderCount, 0);
         const categoryTotals = new Map<number, {categoryName: string; revenue: number; unitsSold: number}>();
-        for (const order of paidOrders) {
-            const orderTotal = Number(order.total);
-            if (!Number.isFinite(orderTotal)) continue;
-            const date = dateInTimezone(order.paidAt as Date, timezone);
-            const day = revenueByDate.get(date);
-            if (day) {
-                day.revenue = roundMoney(day.revenue + orderTotal);
-                day.paidOrderCount += 1;
-            }
-            confirmedRevenue = roundMoney(confirmedRevenue + orderTotal);
-
-            const itemAmounts = new Map<number, {categoryName: string; amount: number; unitsSold: number}>();
-            let subtotal = 0;
-            for (const item of order.items ?? []) {
-                const categoryId = Number(item.categoryIdSnapshot);
-                const categoryName = item.categoryNameSnapshot?.trim();
-                if (!Number.isInteger(categoryId) || categoryId < 1 || !categoryName) continue;
-                const quantity = Number(item.quantity);
-                const lineAmount = Number(item.price) * quantity;
-                if (!Number.isFinite(lineAmount) || lineAmount < 0 || !Number.isFinite(quantity)) continue;
-                const existing = itemAmounts.get(categoryId) ?? {categoryName, amount: 0, unitsSold: 0};
-                existing.amount += lineAmount;
-                existing.unitsSold += quantity;
-                itemAmounts.set(categoryId, existing);
-                subtotal += lineAmount;
-            }
-            if (subtotal <= 0) continue;
+        const orderCategories = new Map<number, Array<{categoryId: number; categoryName: string; categorySubtotal: number; orderTotal: number; orderSubtotal: number; unitsSold: number}>>();
+        for (const row of categoryRows) {
+            const orderId = Number(row.orderId);
+            const categoryId = Number(row.categoryId);
+            if (!Number.isInteger(orderId) || !Number.isInteger(categoryId) || categoryId < 1) continue;
+            const categories = orderCategories.get(orderId) ?? [];
+            categories.push({
+                categoryId,
+                categoryName: String(row.categoryName).trim(),
+                categorySubtotal: toNumber(row.categorySubtotal),
+                orderTotal: toNumber(row.orderTotal),
+                orderSubtotal: toNumber(row.orderSubtotal),
+                unitsSold: toNumber(row.unitsSold),
+            });
+            orderCategories.set(orderId, categories);
+        }
+        for (const categories of orderCategories.values()) {
+            const first = categories[0];
+            if (first.orderSubtotal <= 0) continue;
             let allocated = 0;
-            const entries = [...itemAmounts.entries()];
-            entries.forEach(([categoryId, category], index) => {
-                const allocation = index === entries.length - 1
-                    ? roundMoney(orderTotal - allocated)
-                    : roundMoney(orderTotal * category.amount / subtotal);
+            categories.forEach((category, index) => {
+                const allocation = index === categories.length - 1
+                    ? roundMoney(first.orderTotal - allocated)
+                    : roundMoney(first.orderTotal * category.categorySubtotal / first.orderSubtotal);
                 allocated = roundMoney(allocated + allocation);
-                const total = categoryTotals.get(categoryId) ?? {categoryName: category.categoryName, revenue: 0, unitsSold: 0};
+                const total = categoryTotals.get(category.categoryId) ?? {categoryName: category.categoryName, revenue: 0, unitsSold: 0};
                 total.revenue = roundMoney(total.revenue + allocation);
                 total.unitsSold += category.unitsSold;
-                categoryTotals.set(categoryId, total);
+                categoryTotals.set(category.categoryId, total);
             });
         }
 
-        const uniqueUsers = new Map<string, {country: string | null; checkoutAt: Date}>();
-        for (const order of placedOrders) {
-            const userId = order.user?.id;
-            if (!userId || !order.checkoutAt) continue;
-            const existing = uniqueUsers.get(userId);
-            if (!existing || order.checkoutAt > existing.checkoutAt) {
-                uniqueUsers.set(userId, {
-                    country: normalizeCountry(order.billingCountrySnapshot ?? order.billingInformation?.country),
-                    checkoutAt: order.checkoutAt,
-                });
-            }
-        }
-
         const countryCounts = new Map<string | null, number>();
-        for (const user of uniqueUsers.values()) countryCounts.set(user.country, (countryCounts.get(user.country) ?? 0) + 1);
-        const totalUsers = uniqueUsers.size;
+        for (const row of countryRows) {
+            const country = normalizeCountry(row.country);
+            countryCounts.set(country, (countryCounts.get(country) ?? 0) + toNumber(row.userCount));
+        }
+        const totalUsers = [...countryCounts.values()].reduce((sum, count) => sum + count, 0);
         const activeUsersByCountry = [...countryCounts.entries()]
             .sort(([countryA, countA], [countryB, countB]) => countB - countA || String(countryA).localeCompare(String(countryB)))
             .map(([country, userCount]) => ({country, userCount, sharePercent: totalUsers ? roundPercent(userCount / totalUsers * 100) : 0}));
@@ -208,8 +248,8 @@ export class AnalyticsService {
 
         return {
             period: {from, to, timezone},
-            sales: {currency: "UYU", confirmedRevenue, paidOrderCount: paidOrders.length},
-            revenueByDay: [...revenueByDate.entries()].map(([date, value]) => ({date, ...value})),
+            sales: {currency: "UYU", confirmedRevenue, paidOrderCount},
+            revenueByDay: dayBuckets.map(bucket => ({date: bucket.date, ...(revenueByDate.get(bucket.date) ?? {revenue: 0, paidOrderCount: 0})})),
             monthlyTarget: {
                 amount,
                 achievedAmount: confirmedRevenue,
