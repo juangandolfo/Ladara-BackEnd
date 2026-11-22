@@ -1,0 +1,1906 @@
+openapi: 3.1.0
+info:
+  title: Ladara backend API
+  version: 1.0.0
+  description: |
+    Contract for the routes registered by the backend on the dev branch. Paths,
+    authentication, request validation, response bodies, and status codes are
+    based on the route, middleware, controller, and DTO implementations. This
+    describes current behavior, not a promise that the behavior is stable.
+
+    Frontend expectations from the separate frontend contract are called out
+    with x-frontend-expectation where they differ from or are not established
+    by the server implementation. Those extensions are not server guarantees.
+    No product-by-id route is registered.
+servers:
+  - url: http://localhost:3000
+    description: Default local server; the listening port can be overridden with PORT.
+tags:
+  - name: Authentication
+  - name: Products
+  - name: Orders
+  - name: Billing information
+  - name: Business settings
+  - name: Analytics
+  - name: Discounts
+paths:
+  /auth/google:
+    get:
+      tags: [Authentication]
+      summary: Start Google OAuth
+      description: Redirects the browser to Google for profile and email authorization.
+      responses:
+        "302":
+          description: Redirect to Google OAuth.
+        default:
+          description: Passport or OAuth provider response.
+  /auth/google/callback:
+    get:
+      tags: [Authentication]
+      summary: Handle Google OAuth callback
+      description: |
+        On success, returns HTML that posts `{ user, token }` to `window.opener`
+        and closes the popup. The `origin` query value is used as the
+        postMessage target origin; the default is `*`. The user object comes
+        from the backend User entity (`id`, `name`, and `isAdmin`).
+      x-frontend-expectation: The frontend AppUser type permits an email field, but the backend User entity does not define one.
+      parameters:
+        - name: origin
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: HTML popup callback response.
+          content:
+            text/html:
+              schema: { type: string }
+        "302":
+          description: OAuth failure redirect to `/`.
+        "500":
+          description: Callback processing error.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get the authenticated user
+      description: Verifies the supplied token and returns the user record.
+      x-frontend-expectation: The frontend AppUser type permits an email field, but the backend User entity does not define one.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User was found for the token.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
+        "401":
+          description: Authorization header or token is missing or invalid.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthError" }
+        "500":
+          description: User lookup failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthError" }
+  /api/products/query:
+    get:
+      tags: [Products]
+      summary: Query products
+      description: |
+        Public route. The implementation accepts product filter query
+        parameters and returns product entity data with a `discountedPrice`
+        value. Some filter properties are consumed by the service but are not
+        covered by request validators.
+      x-frontend-expectation: The frontend sends an Authorization header, possibly `Bearer null`; the route does not require authentication.
+      parameters:
+        - name: id
+          in: query
+          schema: { type: integer }
+        - name: name
+          in: query
+          schema: { type: string }
+        - name: description
+          in: query
+          schema: { type: string }
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: price
+          in: query
+          schema: { type: number }
+        - name: minPrice
+          in: query
+          schema: { type: number, minimum: 0 }
+        - name: maxPrice
+          in: query
+          schema: { type: number, minimum: 0 }
+        - name: stock
+          in: query
+          schema: { type: integer }
+        - name: minStock
+          in: query
+          schema: { type: integer, minimum: 0 }
+        - name: maxStock
+          in: query
+          schema: { type: integer, minimum: 0 }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [id, name, price, description, code, stock]
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [ASC, DESC]
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0 }
+        - name: includeDeleted
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Filtered products and paging metadata.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductFilterResponse" }
+        "400":
+          description: Invalid validated filter or an inverted min/max range.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationOrMessageError" }
+        "500":
+          description: Product filtering failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/products/filter:
+    post:
+      tags: [Products]
+      summary: Query products with a JSON filter
+      description: |
+        Public route. The controller reads the filter object from the request
+        body. The route's Express validators inspect query parameters instead
+        of the body, so body fields are not validated by those validators.
+      x-frontend-expectation: Frontend filter payload fields are client expectations; server-side body validation is not established by this route.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProductFilters" }
+      responses:
+        "200":
+          description: Filtered products and paging metadata.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductFilterResponse" }
+        "400":
+          description: Invalid validated query parameter or an inverted min/max range.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationOrMessageError" }
+        "500":
+          description: Product filtering failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/products/categories:
+    get:
+      tags: [Products]
+      summary: List product categories
+      description: Public route returning distinct category names.
+      x-frontend-expectation: The frontend sends an Authorization header, possibly `Bearer null`; the route does not require authentication.
+      responses:
+        "200":
+          description: Category names.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { type: string }
+                      count: { type: integer }
+        "500":
+          description: Category lookup failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/products:
+    get:
+      tags: [Products]
+      summary: List products
+      description: Returns all non-deleted products. Admin only.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Product list and count.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Product" }
+                      count: { type: integer }
+        "403":
+          description: Invalid/missing token (plain text) or non-admin user (JSON).
+        "500":
+          description: Product lookup failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    post:
+      tags: [Products]
+      summary: Create a product
+      description: Admin only. Category is resolved or created by its name.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateProduct" }
+      responses:
+        "201":
+          description: Product created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductDataResponse" }
+        "400":
+          description: Request validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "403":
+          description: Invalid/missing token (plain text) or non-admin user (JSON).
+        "500":
+          description: Product creation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/products/deleted:
+    get:
+      tags: [Products]
+      summary: List deleted products
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Deleted products and count.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Product" }
+                      count: { type: integer }
+        "403":
+          description: Invalid/missing token (plain text) or non-admin user (JSON).
+        "500":
+          description: Product lookup failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/products/{id}:
+    put:
+      tags: [Products]
+      summary: Update a product
+      description: Admin only. Supplied fields are updated; category names are resolved or created.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PositiveId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProduct" }
+      responses:
+        "200":
+          description: Updated product.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductDataResponse" }
+        "400":
+          description: Invalid product ID or request validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationOrMessageError" }
+        "403":
+          description: Invalid/missing token (plain text) or non-admin user (JSON).
+        "404":
+          description: Product not found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "500":
+          description: Product update failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    delete:
+      tags: [Products]
+      summary: Soft-delete a product
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PositiveId"
+      responses:
+        "200":
+          description: Product soft-deleted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400":
+          description: Invalid product ID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationOrMessageError" }
+        "403":
+          description: Invalid/missing token (plain text) or non-admin user (JSON).
+        "404":
+          description: Product not found or already deleted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "500":
+          description: Product deletion failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/products/{id}/restore:
+    post:
+      tags: [Products]
+      summary: Restore a deleted product
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PositiveId"
+      responses:
+        "200":
+          description: Product restored.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400":
+          description: Invalid product ID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationOrMessageError" }
+        "403":
+          description: Invalid/missing token (plain text) or non-admin user (JSON).
+        "404":
+          description: Product not found or not deleted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "500":
+          description: Product restore failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/products/{id}/permanent:
+    delete:
+      tags: [Products]
+      summary: Permanently delete a product
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PositiveId"
+      responses:
+        "200":
+          description: Product permanently deleted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400":
+          description: Invalid product ID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationOrMessageError" }
+        "403":
+          description: Invalid/missing token (plain text) or non-admin user (JSON).
+        "404":
+          description: Product not found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "500":
+          description: Permanent deletion failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/orders/checkout:
+    get:
+      tags: [Orders]
+      summary: Serve checkout page
+      description: Public endpoint serving the checkout HTML page.
+      responses:
+        "200":
+          description: Checkout HTML page.
+          content:
+            text/html:
+              schema: { type: string }
+  /api/orders/recommendations:
+    get:
+      tags: [Orders]
+      summary: List recommended products
+      description: Returns up to 12 products in ascending ID order.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 4, maximum: 12 }
+      responses:
+        "200":
+          description: Recommended products.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/RecommendedProduct" }
+        "500":
+          description: Recommendation lookup failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/orders/current:
+    get:
+      tags: [Orders]
+      summary: Get or create the current cart
+      x-frontend-expectation: The frontend accepts either an object or array in `data`; this implementation always returns an array.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current cart, wrapped in a one-element array.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderListResponse" }
+        "403":
+          description: Invalid/missing bearer token (plain text).
+        "500":
+          description: Cart lookup or creation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/orders/current/items:
+    delete:
+      tags: [Orders]
+      summary: Clear the current cart
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Cart cleared.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "401":
+          description: Invalid/missing bearer token (plain text) or unauthenticated user (JSON).
+        "500":
+          description: Cart clearing failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/orders/admin:
+    get:
+      tags: [Orders]
+      summary: List all orders
+      description: Admin only; returns orders in newest-first order.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Orders.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderListResponse" }
+        "403":
+          description: Invalid/missing token (plain text) or non-admin user (JSON).
+        "500":
+          description: Order lookup failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/orders/admin/dashboard-summary:
+    get:
+      tags: [Orders]
+      summary: Get order dashboard summary
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Counts of carts, placed orders, and recently completed orders.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data:
+                    type: object
+                    required: [cartCount, orderPlacedCount, completedLast30DaysCount]
+                    properties:
+                      cartCount: { type: integer }
+                      orderPlacedCount: { type: integer }
+                      completedLast30DaysCount: { type: integer }
+        "403":
+          description: Invalid/missing token (plain text) or non-admin user (JSON).
+        "500":
+          description: Summary lookup failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/orders:
+    get:
+      tags: [Orders]
+      summary: List the current user's non-cart orders
+      x-frontend-expectation: Frontend order/history declarations differ; the server serializes its OrderDto shape and returns 404 when there are no non-cart orders.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User orders.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderListResponse" }
+        "403":
+          description: Invalid/missing bearer token (plain text).
+        "404":
+          description: The user has no non-cart orders.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          description: Order lookup failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/orders/coupons/validate:
+    post:
+      tags: [Orders]
+      summary: Validate a coupon
+      description: Accepts codes matching `SAVE` followed by one or two digits.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        "200":
+          description: Coupon accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CouponResponse" }
+        "400":
+          description: Missing or invalid coupon code.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "403":
+          description: Invalid/missing bearer token (plain text).
+        "500":
+          description: Coupon validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/orders/{id}/validate:
+    post:
+      tags: [Orders]
+      summary: Validate items and prices in an order
+      description: |
+        Order owner only. A validation result with rejected items is returned
+        with HTTP 200 and `success: false`; it is not an HTTP error.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PositiveId"
+      responses:
+        "200":
+          description: Stock and price validation result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderValidationResponse" }
+        "400":
+          description: Invalid order ID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "403":
+          description: Invalid/missing token or order belongs to another user.
+        "404":
+          description: Order not found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          description: Order validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/orders/{id}/items:
+    post:
+      tags: [Orders]
+      summary: Add an item to an order
+      description: Order owner only. Existing matching items have their quantity increased.
+      x-frontend-expectation: The frontend contract mentions an `item` property, but this implementation returns the created item under `data`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PositiveId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, quantity]
+              properties:
+                productId: { type: integer, minimum: 1 }
+                quantity: { type: integer, minimum: 1 }
+      responses:
+        "201":
+          description: Item added or merged.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderItemResponse" }
+        "400":
+          description: Invalid order ID or request validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "403":
+          description: Invalid/missing token or order belongs to another user.
+        "404":
+          description: Order or product not found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          description: Item addition failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/orders/{id}/checkout:
+    post:
+      tags: [Orders]
+      summary: Save checkout details and place an order
+      description: |
+        Order owner only. Checkout records an existing billing-information
+        record and a payment method; it does not process a payment.
+      x-frontend-expectation: "The frontend contract describes a `billingAddress` object and `paymentMethod: pending`; the server instead requires `billingInformationId` and `paymentMethod` equal to `bank_transfer` or `cash`."
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PositiveId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [billingInformationId, paymentMethod]
+              properties:
+                billingInformationId: { type: integer, minimum: 1 }
+                paymentMethod:
+                  type: string
+                  enum: [bank_transfer, cash]
+      responses:
+        "201":
+          description: Checkout details saved; payment was not processed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderDataResponse" }
+        "400":
+          description: Invalid order ID, request validation error, empty cart, or unsupported payment method.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationOrMessageError" }
+        "403":
+          description: Invalid/missing token or order belongs to another user.
+        "404":
+          description: Order or user's billing-information record not found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "409":
+          description: Order is no longer in the cart state.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          description: Checkout failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/orders/items/{itemId}:
+    put:
+      tags: [Orders]
+      summary: Set an order item's quantity
+      description: |
+        Requires a valid user token. The current middleware does not verify
+        that the item belongs to that user. A quantity of zero removes it.
+      x-implementation-warning: Item ownership is not checked by the current route.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ItemId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: Quantity updated or item removed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderItemResponse" }
+        "400":
+          description: Invalid item ID or quantity.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationOrMessageError" }
+        "403":
+          description: Invalid/missing bearer token (plain text).
+        "404":
+          description: Order item not found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          description: Item update failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    delete:
+      tags: [Orders]
+      summary: Decrease an order item's quantity by one
+      description: |
+        Requires a valid user token. Removes the item when its quantity reaches
+        zero. The current middleware does not verify item ownership.
+      x-implementation-warning: Item ownership is not checked by the current route.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ItemId"
+      responses:
+        "200":
+          description: Quantity decreased or item removed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400":
+          description: Invalid item ID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "403":
+          description: Invalid/missing bearer token (plain text).
+        "404":
+          description: Order item not found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          description: Item deletion failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/orders/{id}/fulfillment:
+    patch:
+      tags: [Orders]
+      summary: Update order fulfillment
+      description: Admin only. Supply one or more fulfillment fields; omitted values remain unchanged.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PositiveId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FulfillmentUpdate" }
+      responses:
+        "200":
+          description: Updated order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderDataResponse" }
+        "400":
+          description: Invalid order ID, empty body, unsupported field, or invalid field value.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationOrMessageError" }
+        "403":
+          description: Invalid/missing token (plain text) or non-admin user (JSON).
+        "404":
+          description: Order not found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          description: Fulfillment update failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/orders/{id}/complete:
+    post:
+      tags: [Orders]
+      summary: Complete an order
+      description: Admin only. Completion requires payment, invoice issuance, and delivery to be recorded.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PositiveId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                billing: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Completed order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrderDataResponse" }
+        "400":
+          description: Invalid order ID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "403":
+          description: Invalid/missing token (plain text) or non-admin user (JSON).
+        "404":
+          description: Order not found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "409":
+          description: Payment, invoice, or delivery requirements are not met.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          description: Completion or confirmation email failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/billing-information:
+    get:
+      tags: [Billing information]
+      summary: List the current user's billing information
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Saved billing-information records.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/SuccessEnvelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/BillingInformation" }
+        "403":
+          description: Invalid/missing bearer token (plain text).
+        "500":
+          description: Billing-information lookup failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    post:
+      tags: [Billing information]
+      summary: Create billing information
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BillingInformationInput" }
+      responses:
+        "201":
+          description: Billing information created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingInformationDataResponse" }
+        "400":
+          description: Request validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "403":
+          description: Invalid/missing bearer token (plain text).
+        "500":
+          description: Billing-information creation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/billing-information/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PositiveId"
+    get:
+      tags: [Billing information]
+      summary: Get one of the current user's billing-information records
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Billing information.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingInformationDataResponse" }
+        "400":
+          description: Invalid record ID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "403":
+          description: Invalid/missing bearer token (plain text).
+        "404":
+          description: Record not found for the current user.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          description: Billing-information lookup failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    put:
+      tags: [Billing information]
+      summary: Replace a billing-information record
+      description: All required input fields must be supplied.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BillingInformationInput" }
+      responses:
+        "200":
+          description: Updated billing information.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingInformationDataResponse" }
+        "400":
+          description: Invalid record ID or request validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "403":
+          description: Invalid/missing bearer token (plain text).
+        "404":
+          description: Record not found for the current user.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          description: Billing-information update failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    delete:
+      tags: [Billing information]
+      summary: Delete a billing-information record
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Billing information deleted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessEnvelope" }
+        "400":
+          description: Invalid record ID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "403":
+          description: Invalid/missing bearer token (plain text).
+        "404":
+          description: Record not found for the current user.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "409":
+          description: Record is referenced by an order.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          description: Billing-information deletion failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+  /api/settings/shipping-cost:
+    get:
+      tags: [Business settings]
+      summary: Get shipping cost
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Shipping cost setting.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SettingResponse" }
+        "403":
+          description: Invalid/missing bearer token (plain text).
+        "500":
+          description: Setting lookup failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    put:
+      tags: [Business settings]
+      summary: Update shipping cost
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shippingCost: { $ref: "#/components/schemas/ShippingCost" }
+                value: { $ref: "#/components/schemas/ShippingCost" }
+      responses:
+        "200":
+          description: Updated shipping-cost setting.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SettingResponse" }
+        "400":
+          description: Invalid or missing value.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "403":
+          description: Invalid/missing token or non-admin user.
+  /api/settings/free-shipping-threshold:
+    get:
+      tags: [Business settings]
+      summary: Get free-shipping threshold
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Free-shipping threshold; zero disables free shipping.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SettingResponse" }
+        "403":
+          description: Invalid/missing bearer token (plain text).
+        "500":
+          description: Setting lookup failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    put:
+      tags: [Business settings]
+      summary: Update free-shipping threshold
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                freeShippingThreshold: { $ref: "#/components/schemas/NonNegativeMoney" }
+                value: { $ref: "#/components/schemas/NonNegativeMoney" }
+      responses:
+        "200":
+          description: Updated threshold.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SettingResponse" }
+        "400":
+          description: Invalid or missing value.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "403":
+          description: Invalid/missing token or non-admin user.
+  /api/settings/monthly-sales-target:
+    get:
+      tags: [Business settings]
+      summary: Get monthly sales target
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Configured target, or null when unset.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SettingResponse" }
+        "401":
+          description: Invalid/missing bearer token (plain text).
+        "500":
+          description: Target lookup failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    put:
+      tags: [Business settings]
+      summary: Set monthly sales target
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount: { $ref: "#/components/schemas/NonNegativeMoney" }
+      responses:
+        "200":
+          description: Updated monthly target.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SettingResponse" }
+        "400":
+          description: Invalid target value.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "401":
+          description: Invalid/missing bearer token (plain text).
+        "403":
+          description: Authenticated user is not an admin.
+  /api/settings/timezone:
+    get:
+      tags: [Business settings]
+      summary: Get business timezone
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Configured IANA timezone; defaults to `America/Montevideo`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SettingResponse" }
+        "401":
+          description: Invalid/missing bearer token (plain text).
+        "500":
+          description: Timezone lookup failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+    put:
+      tags: [Business settings]
+      summary: Set business timezone
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [timezone]
+              properties:
+                timezone: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Updated timezone.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SettingResponse" }
+        "400":
+          description: Timezone is not a valid IANA timezone.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "401":
+          description: Invalid/missing bearer token (plain text).
+        "403":
+          description: Authenticated user is not an admin.
+  /api/analytics/admin/dashboard:
+    get:
+      tags: [Analytics]
+      summary: Get admin dashboard analytics
+      description: |
+        Admin only. Dates are inclusive calendar dates in the configured
+        timezone. The range must be valid and no longer than 366 days.
+        Revenue uses orders currently marked paid and their persisted totals.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Dashboard aggregates.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: { type: boolean, const: true }
+                  data: { $ref: "#/components/schemas/DashboardData" }
+        "400":
+          description: Invalid calendar date, date order, or range over 366 days.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "401":
+          description: Invalid/missing bearer token (plain text).
+        "403":
+          description: Authenticated user is not an admin.
+        "500":
+          description: Analytics lookup failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+  /api/discounts:
+    get:
+      tags: [Discounts]
+      summary: List discounts
+      description: Admin only.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Discount records.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiscountListResponse" }
+        "403":
+          description: Invalid/missing token (plain text) or non-admin user (JSON).
+        "500":
+          description: Unhandled persistence error; the default Express error response is not a stable JSON contract.
+    post:
+      tags: [Discounts]
+      summary: Create a discount
+      description: |
+        Admin only. The create route has no field-level request validators.
+        Database constraints and accepted request fields should not be treated
+        as a fully defined client contract.
+      x-implementation-warning: Create validators are empty; successful request shape is not fully established.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DiscountInput" }
+      responses:
+        "201":
+          description: Discount created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiscountDataResponse" }
+        "403":
+          description: Invalid/missing token (plain text) or non-admin user (JSON).
+        "500":
+          description: Discount creation or persistence failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+  /api/discounts/deleted:
+    get:
+      tags: [Discounts]
+      summary: List soft-deleted discounts
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Soft-deleted discount records.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiscountListResponse" }
+        "403":
+          description: Invalid/missing token (plain text) or non-admin user (JSON).
+        "500":
+          description: Unhandled persistence error; the default Express error response is not a stable JSON contract.
+  /api/discounts/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PositiveId"
+    put:
+      tags: [Discounts]
+      summary: Update a discount
+      description: |
+        Admin only. Request validation allows `name`, `percentage`, `active`,
+        and `expiresAt`, while the persisted Discount entity defines
+        `user`, `value`, `type`, `description`, and `usesLeft`. The effective
+        persistence behavior for the validated update fields is not
+        established by the current entity mapping. The route also does not
+        validate that the path ID is a positive integer.
+      x-implementation-warning: Validated update properties do not match the persisted Discount entity properties.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                percentage: { type: number, minimum: 0, maximum: 100 }
+                active: { type: boolean }
+                expiresAt: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Discount update result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiscountDataResponse" }
+        "400":
+          description: Update field validation failed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "403":
+          description: Invalid/missing token (plain text) or non-admin user (JSON).
+        "404":
+          description: Discount not found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          description: Unhandled persistence error; the default Express error response is not a stable JSON contract.
+    delete:
+      tags: [Discounts]
+      summary: Permanently delete a discount
+      description: Admin only; this endpoint performs a hard delete.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Discount deleted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuccessMessageResponse" }
+        "400":
+          description: Invalid discount ID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationError" }
+        "403":
+          description: Invalid/missing token (plain text) or non-admin user (JSON).
+        "404":
+          description: Discount not found.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MessageError" }
+        "500":
+          description: Unhandled persistence error; the default Express error response is not a stable JSON contract.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Protected routes verify a JWT. Some middleware returns HTTP 403 with
+        plain-text errors; route-specific authorization middleware can use 401.
+        AuthService and auth middleware currently use different fallback JWT
+        secrets when SECRET_JWT_KEY is unset, so generated tokens may not work
+        on protected routes without that environment variable configured.
+  parameters:
+    PositiveId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    ItemId:
+      name: itemId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+  schemas:
+    SuccessEnvelope:
+      type: object
+      required: [success]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+    ErrorResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success: { type: boolean, const: false }
+        message: { type: string }
+        error: { type: string }
+    MessageError:
+      type: object
+      properties:
+        success: { type: boolean, const: false }
+        message: { type: string }
+    SuccessMessageResponse:
+      type: object
+      required: [success, message]
+      properties:
+        success: { type: boolean, const: true }
+        message: { type: string }
+    AuthError:
+      type: object
+      properties:
+        error: { type: string }
+    ValidationError:
+      type: object
+      required: [success, errors]
+      properties:
+        success: { type: boolean, const: false }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string }
+              value: {}
+              msg: {}
+              path: {}
+              location: {}
+    ValidationOrMessageError:
+      oneOf:
+        - $ref: "#/components/schemas/ValidationError"
+        - $ref: "#/components/schemas/ErrorResponse"
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        isAdmin: { type: boolean }
+    ProductFilters:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string }
+        code: { type: string }
+        price: { type: number }
+        minPrice: { type: number, minimum: 0 }
+        maxPrice: { type: number, minimum: 0 }
+        stock: { type: integer }
+        minStock: { type: integer, minimum: 0 }
+        maxStock: { type: integer, minimum: 0 }
+        category: { type: string }
+        sortBy:
+          type: string
+          enum: [id, name, price, description, code, stock]
+        sortOrder:
+          type: string
+          enum: [ASC, DESC]
+        limit: { type: integer, minimum: 1 }
+        offset: { type: integer, minimum: 0 }
+        includeDeleted: { type: boolean }
+    Product:
+      type: object
+      description: Product entity with an extra discountedPrice property on query responses.
+      x-frontend-expectation: The frontend Product type also includes brand, isActive, createdAt, and updatedAt; those fields are not defined by the backend Product entity. discountedPrice is only added to query results.
+      required: [id, name, price, stock, category, image]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        price: { type: number }
+        description: { type: [string, "null"] }
+        code: { type: [string, "null"] }
+        stock: { type: integer }
+        category: { type: string }
+        categoryId: { type: [integer, "null"] }
+        image: { type: string }
+        deletedAt: { type: [string, "null"], format: date-time }
+        discountedPrice: { type: number }
+    CreateProduct:
+      type: object
+      required: [name, price, stock, category]
+      properties:
+        name: { type: string, minLength: 1 }
+        price: { type: number, minimum: 0 }
+        stock: { type: integer, minimum: 0 }
+        category: { type: string, minLength: 1 }
+        description: { type: string }
+        code: { type: string }
+        image: { type: string }
+    UpdateProduct:
+      type: object
+      properties:
+        name: { type: string }
+        price: { type: number, minimum: 0 }
+        stock: { type: integer, minimum: 0 }
+        category: { type: string }
+        description: { type: string }
+        code: { type: string }
+        image: { type: string }
+    ProductFilterResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          required: [data, meta]
+          properties:
+            data:
+              type: array
+              items: { $ref: "#/components/schemas/Product" }
+            meta:
+              type: object
+              required: [total, count, appliedFilters]
+              properties:
+                total: { type: integer }
+                count: { type: integer }
+                appliedFilters: { $ref: "#/components/schemas/ProductFilters" }
+    ProductDataResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: "#/components/schemas/Product" }
+    RecommendedProduct:
+      type: object
+      required: [id, name, price, stock, image, category]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        price: { type: number }
+        stock: { type: integer }
+        image: { type: string }
+        category: { type: string }
+        description: { type: [string, "null"] }
+    BillingInformationInput:
+      type: object
+      required: [fullName, addressLine1, city, postalCode, country]
+      properties:
+        fullName: { type: string, maxLength: 120 }
+        company: { type: [string, "null"], maxLength: 120 }
+        addressLine1: { type: string, maxLength: 255 }
+        addressLine2: { type: [string, "null"], maxLength: 255 }
+        city: { type: string, maxLength: 120 }
+        state: { type: [string, "null"], maxLength: 120 }
+        postalCode: { type: string, maxLength: 32 }
+        country: { type: string, maxLength: 100 }
+        phone: { type: [string, "null"], maxLength: 50 }
+    BillingInformation:
+      allOf:
+        - $ref: "#/components/schemas/BillingInformationInput"
+        - type: object
+          required: [id, userId, createdAt]
+          properties:
+            id: { type: integer }
+            userId: { type: string, format: uuid }
+            createdAt: { type: string, format: date-time }
+    BillingInformationDataResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: "#/components/schemas/BillingInformation" }
+    OrderItem:
+      type: object
+      required: [id, productId, quantity, price, total]
+      properties:
+        id: { type: integer }
+        productId: { type: integer }
+        quantity: { type: integer }
+        price: { type: number }
+        total: { type: number }
+        product:
+          type: object
+          properties:
+            id: { type: integer }
+            name: { type: string }
+            price: { type: number }
+            stock: { type: integer }
+            discountedPrice: { type: number }
+            image: { type: string }
+            category: { type: string }
+            description: { type: string }
+    Order:
+      type: object
+      required:
+        - id
+        - userId
+        - status
+        - total
+        - shippingCost
+        - createdAt
+        - updatedAt
+        - paymentStatus
+        - paymentReference
+        - paidAt
+        - invoiceIdentifier
+        - invoiceIssuedAt
+        - isDelivered
+        - deliveredAt
+        - deliveryDocumentIdentifier
+        - completedAt
+      properties:
+        id: { type: integer }
+        userId: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [cart, order_placed, completed]
+        total: { type: number }
+        shippingCost: { type: number }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        billingInformationId: { type: integer }
+        billingAddress: { $ref: "#/components/schemas/BillingAddress" }
+        paymentMethod: { type: string }
+        checkoutAt: { type: string, format: date-time }
+        paymentStatus: { type: string, enum: [unpaid, paid] }
+        paymentReference: { type: [string, "null"] }
+        paidAt: { type: [string, "null"], format: date-time }
+        invoiceIdentifier: { type: [string, "null"] }
+        invoiceIssuedAt: { type: [string, "null"], format: date-time }
+        isDelivered: { type: boolean }
+        deliveredAt: { type: [string, "null"], format: date-time }
+        deliveryDocumentIdentifier: { type: [string, "null"] }
+        completedAt: { type: [string, "null"], format: date-time }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OrderItem" }
+    BillingAddress:
+      type: object
+      required: [fullName, addressLine1, city, postalCode, country]
+      properties:
+        fullName: { type: string }
+        company: { type: string }
+        addressLine1: { type: string }
+        addressLine2: { type: string }
+        city: { type: string }
+        state: { type: string }
+        postalCode: { type: string }
+        country: { type: string }
+        phone: { type: string }
+    OrderListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: array
+              items: { $ref: "#/components/schemas/Order" }
+    OrderDataResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: "#/components/schemas/Order" }
+    OrderItemResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: "#/components/schemas/OrderItem" }
+    CouponResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [valid, code, discountAmount]
+              properties:
+                valid: { type: boolean, const: true }
+                code: { type: string }
+                discountAmount: { type: number }
+    OrderValidationResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [valid, rejectedItems]
+              properties:
+                valid: { type: boolean }
+                rejectedItems:
+                  type: array
+                  items:
+                    type: object
+                    required: [itemId, reason, message]
+                    properties:
+                      itemId: { type: [integer, string] }
+                      reason: { type: string, enum: [PRODUCT_NOT_FOUND, OUT_OF_STOCK, PRICE_CHANGED] }
+                      message: { type: string }
+    FulfillmentUpdate:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        paymentStatus: { type: string, enum: [unpaid, paid] }
+        paymentReference: { type: [string, "null"], maxLength: 255 }
+        invoiceIssued: { type: boolean }
+        invoiceIdentifier: { type: [string, "null"], maxLength: 100 }
+        isDelivered: { type: boolean }
+        deliveryDocumentIdentifier: { type: [string, "null"], maxLength: 255 }
+    NonNegativeMoney:
+      oneOf:
+        - type: number
+          minimum: 0
+          maximum: 99999999.99
+          multipleOf: 0.01
+        - type: string
+          pattern: "^(?:0*[0-9]{1,7}|0*[1-9][0-9]{0,7})(\\.[0-9]{1,2})?$"
+    ShippingCost:
+      oneOf:
+        - type: number
+          minimum: 0
+          maximum: 9999.99
+          multipleOf: 0.01
+        - type: string
+          pattern: "^(?:0*[0-9]{1,3}|0*[1-9][0-9]{0,3})(\\.[0-9]{1,2})?$"
+    SettingResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [key, value]
+              properties:
+                key: { type: string }
+                value: { type: [number, string, "null"] }
+    DashboardData:
+      type: object
+      required: [period, sales, revenueByDay, monthlyTarget, categorySales, activeUsersByCountry, recentActivity]
+      properties:
+        period:
+          type: object
+          required: [from, to, timezone]
+          properties:
+            from: { type: string, format: date }
+            to: { type: string, format: date }
+            timezone: { type: string }
+        sales:
+          type: object
+          required: [currency, confirmedRevenue, paidOrderCount]
+          properties:
+            currency: { type: string, const: UYU }
+            confirmedRevenue: { type: number }
+            paidOrderCount: { type: integer }
+        revenueByDay:
+          type: array
+          items:
+            type: object
+            required: [date, revenue, paidOrderCount]
+            properties:
+              date: { type: string, format: date }
+              revenue: { type: number }
+              paidOrderCount: { type: integer }
+        monthlyTarget:
+          type: object
+          required: [amount, achievedAmount, completionPercent]
+          properties:
+            amount: { type: [number, "null"] }
+            achievedAmount: { type: number }
+            completionPercent: { type: [number, "null"] }
+        categorySales:
+          type: array
+          items:
+            type: object
+            required: [categoryId, categoryName, revenue, unitsSold, sharePercent]
+            properties:
+              categoryId: { type: integer }
+              categoryName: { type: string }
+              revenue: { type: number }
+              unitsSold: { type: integer }
+              sharePercent: { type: number }
+        activeUsersByCountry:
+          type: array
+          items:
+            type: object
+            required: [country, userCount, sharePercent]
+            properties:
+              country: { type: [string, "null"] }
+              userCount: { type: integer }
+              sharePercent: { type: number }
+        recentActivity:
+          type: array
+          items:
+            type: object
+            required: [id, type, description, createdAt, actorName]
+            properties:
+              id: { type: string }
+              type: { type: string }
+              description: { type: string }
+              createdAt: { type: string, format: date-time }
+              actorName: { type: [string, "null"] }
+    Discount:
+      type: object
+      properties:
+        id: { type: integer }
+        user: { $ref: "#/components/schemas/User" }
+        value: { type: number }
+        type: { type: string, enum: [fixed, percent] }
+        description: { type: [string, "null"] }
+        usesLeft: { type: [integer, "null"] }
+        deletedAt: { type: [string, "null"], format: date-time }
+    DiscountInput:
+      type: object
+      properties:
+        user: { $ref: "#/components/schemas/User" }
+        value: { type: number }
+        type: { type: string, enum: [fixed, percent] }
+        description: { type: [string, "null"] }
+        usesLeft: { type: [integer, "null"] }
+    DiscountListResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: array
+              items: { $ref: "#/components/schemas/Discount" }
+    DiscountDataResponse:
+      allOf:
+        - $ref: "#/components/schemas/SuccessEnvelope"
+        - type: object
+          required: [data]
+          properties:
+            data: { $ref: "#/components/schemas/Discount" }
