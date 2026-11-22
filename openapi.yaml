@@ -1,0 +1,543 @@
+openapi: 3.1.0
+info:
+  title: Ladara frontend API expectations
+  version: 0.1.0
+  description: |
+    Client expectations only, derived from the current frontend. This is not
+    an implemented or agreed server contract. Default responses leave status
+    and body unspecified. The nonstandard x-client-expected-content extension
+    records payloads consumed by the client, not response constraints.
+servers:
+  - url: http://localhost:3000
+    description: Current frontend base URL.
+paths:
+  /auth/google:
+    get:
+      summary: Start Google login in a popup
+      description: |
+        Browser navigation. The frontend listens for a same-origin postMessage
+        containing a token and optionally a user. The HTTP response and redirect
+        behavior are not established.
+      responses:
+        default:
+          description: HTTP response or redirect is unspecified.
+  /auth/me:
+    get:
+      summary: Get the current user
+      description: The frontend calls this endpoint only when a bearer token is present.
+      security:
+        - bearerAuth: []
+      responses:
+        default:
+          description: HTTP status and body are unspecified.
+          x-client-expected-content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/AppUser'
+                  - type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/AppUser'
+                      isAdmin:
+                        type: boolean
+  /api/products/query:
+    get:
+      summary: Query products
+      description: |
+        Sends JSON Content-Type and a bearer header; the token may be the
+        literal string null when logged out.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: query
+          schema: {type: number}
+        - name: name
+          in: query
+          schema: {type: string}
+        - name: description
+          in: query
+          schema: {type: string}
+        - name: code
+          in: query
+          schema: {type: string}
+        - name: price
+          in: query
+          schema: {type: number}
+        - name: minPrice
+          in: query
+          schema: {type: number}
+        - name: maxPrice
+          in: query
+          schema: {type: number}
+        - name: stock
+          in: query
+          schema: {type: number}
+        - name: minStock
+          in: query
+          schema: {type: number}
+        - name: maxStock
+          in: query
+          schema: {type: number}
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [id, name, price, description, code, stock]
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [ASC, DESC]
+        - name: limit
+          in: query
+          schema: {type: number}
+        - name: offset
+          in: query
+          schema: {type: number}
+        - name: includeDeleted
+          in: query
+          schema: {type: boolean}
+        - name: category
+          in: query
+          description: Sent by the home screen but absent from the filter DTO.
+          schema: {type: string}
+      responses:
+        default:
+          description: HTTP status and body are unspecified.
+          x-client-expected-content:
+            application/json:
+              schema:
+                type: object
+                description: |
+                  The DTO declares meta required and data optional; the home
+                  screen tolerates either data or meta being absent.
+                required: [success]
+                properties:
+                  success: {type: boolean}
+                  message: {type: string}
+                  error: {type: string}
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  meta:
+                    type: object
+                    required: [total, count, appliedFilters]
+                    properties:
+                      total: {type: number}
+                      count: {type: number}
+                      appliedFilters:
+                        type: object
+                        description: Partial product filter DTO.
+  /api/products/categories:
+    get:
+      summary: List product categories
+      description: Sends JSON Content-Type and a bearer header, including Bearer null when logged out.
+      security:
+        - bearerAuth: []
+      responses:
+        default:
+          description: HTTP status and body are unspecified.
+          x-client-expected-content:
+            application/json:
+              schema:
+                type: object
+                description: The DTO declares data optional; the home screen checks for it.
+                required: [success]
+                properties:
+                  success: {type: boolean}
+                  message: {type: string}
+                  data:
+                    type: array
+                    items: {type: string}
+  /api/orders/current:
+    get:
+      summary: Get the current order
+      description: |
+        Consumers accept an object or array; repeat-order expects an array.
+        Order and item field expectations differ between consumers.
+      security:
+        - bearerAuth: []
+      responses:
+        default:
+          description: HTTP status and body are unspecified.
+          x-client-expected-content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: {type: boolean}
+                  message: {type: string}
+                  data:
+                    anyOf:
+                      - $ref: '#/components/schemas/CurrentOrder'
+                      - type: array
+                        items:
+                          $ref: '#/components/schemas/CurrentOrder'
+  /api/orders:
+    get:
+      summary: List orders
+      description: |
+        History and service models differ; the service DTO allows missing items
+        and nested product, which history dereferences without guards. The
+        alternatives below describe declarations, not interchangeable safe
+        responses; agree on a contract before implementation.
+      security:
+        - bearerAuth: []
+      responses:
+        default:
+          description: HTTP status and body are unspecified.
+          x-client-expected-content:
+            application/json:
+              schema:
+                type: object
+                required: [success, data]
+                properties:
+                  success: {type: boolean}
+                  message: {type: string}
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+  /api/orders/{orderId}/items:
+    post:
+      summary: Add an item to an order
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, quantity]
+              properties:
+                productId: {type: number}
+                quantity: {type: number}
+      responses:
+        default:
+          description: HTTP status and body are unspecified.
+          x-client-expected-content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: {type: boolean}
+                  message: {type: string}
+                  item:
+                    description: Untyped by the service; a separate model declares data instead.
+  /api/orders/items/{itemId}:
+    parameters:
+      - $ref: '#/components/parameters/ItemId'
+    put:
+      summary: Update an order item
+      description: The UI also sends quantity zero to remove an item.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: {type: number}
+      responses:
+        default:
+          $ref: '#/components/responses/MutationResult'
+    delete:
+      summary: Remove an order item
+      security:
+        - bearerAuth: []
+      responses:
+        default:
+          $ref: '#/components/responses/MutationResult'
+  /api/orders/current/items:
+    delete:
+      summary: Clear the current order items
+      security:
+        - bearerAuth: []
+      responses:
+        default:
+          $ref: '#/components/responses/MutationResult'
+  /api/orders/coupons/validate:
+    post:
+      summary: Validate a coupon
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: {type: string}
+      responses:
+        default:
+          description: HTTP status and body are unspecified.
+          x-client-expected-content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: {type: boolean}
+                  message: {type: string}
+                  data:
+                    type: object
+                    properties:
+                      valid: {type: boolean}
+                      code: {type: string}
+                      discountAmount: {type: number}
+                      discount: {type: number}
+                      message: {type: string}
+  /api/orders/{id}/validate:
+    post:
+      summary: Validate an order
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: The frontend sends an empty object.
+      responses:
+        default:
+          description: HTTP status and body are unspecified.
+          x-client-expected-content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: {type: boolean}
+                  message: {type: string}
+                  data:
+                    type: object
+                    required: [valid]
+                    properties:
+                      valid: {type: boolean}
+                      rejectedItems:
+                        type: array
+                        items:
+                          type: object
+                          required: [itemId, reason]
+                          properties:
+                            itemId: {type: number}
+                            reason: {type: string}
+                            message: {type: string}
+  /api/orders/{id}/checkout:
+    post:
+      summary: Check out an order
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [billingAddress, paymentMethod]
+              properties:
+                billingAddress:
+                  type: object
+                  required: [fullName, addressLine1, city, postalCode, country]
+                  properties:
+                    fullName: {type: string}
+                    addressLine1: {type: string}
+                    addressLine2: {type: string}
+                    city: {type: string}
+                    state: {type: string}
+                    postalCode: {type: string}
+                    country: {type: string}
+                    phone: {type: string}
+                paymentMethod:
+                  type: string
+                  const: pending
+      responses:
+        default:
+          description: HTTP status and body are unspecified.
+          x-client-expected-content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: {type: boolean}
+                  message: {type: string}
+                  data: {}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Products and orders send Bearer null when no token is stored.
+  parameters:
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema: {type: number}
+    ItemId:
+      name: itemId
+      in: path
+      required: true
+      schema: {type: number}
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: {type: number}
+  responses:
+    MutationResult:
+      description: HTTP status and body are unspecified.
+      x-client-expected-content:
+        application/json:
+          schema:
+            type: object
+            required: [success]
+            properties:
+              success: {type: boolean}
+              message: {type: string}
+  schemas:
+    AppUser:
+      type: object
+      properties:
+        id:
+          type: [number, string]
+        email: {type: string}
+        name: {type: string}
+        isAdmin: {type: boolean}
+      additionalProperties: true
+    Product:
+      type: object
+      description: Frontend DTO; runtime normalizes missing image values.
+      required: [id, name, price, stock, category, brand, isActive, createdAt, updatedAt, image, discountedPrice]
+      properties:
+        id: {type: number}
+        name: {type: string}
+        price: {type: number}
+        stock: {type: number}
+        category: {type: string}
+        brand: {type: string}
+        description: {type: string}
+        isActive: {type: boolean}
+        createdAt: {type: string}
+        updatedAt: {type: string}
+        image: {type: string}
+        discountedPrice: {type: number}
+        deletedAt: {type: string}
+        sku: {type: string}
+    CurrentOrder:
+      type: object
+      description: |
+        Untyped in the current-order service. Cart reads shippingCost, total,
+        item id, quantity,
+        price and nested product id, name, price, stock, category, image and
+        description. Checkout handles nested product as optional and reads
+        discountedPrice. Individual field types are not established by this
+        untyped service.
+      properties:
+        id: {}
+        shippingCost: {}
+        total: {}
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {}
+              quantity: {}
+              price: {}
+              product:
+                type: object
+                properties:
+                  id: {}
+                  name: {}
+                  price: {}
+                  discountedPrice: {}
+                  stock: {}
+                  category: {}
+                  image: {}
+                  description: {}
+    Order:
+      description: |
+        Service DTO and order-history declarations differ. A DTO without
+        items or an item's product is not safe for the history consumer even
+        though it matches the OrderDto alternative.
+      anyOf:
+        - $ref: '#/components/schemas/OrderDto'
+        - $ref: '#/components/schemas/HistoryOrder'
+    OrderDto:
+      type: object
+      required: [id, userId, status, total, shippingCost, createdAt, updatedAt]
+      properties:
+        id: {type: number}
+        userId: {type: number}
+        status: {type: string}
+        total: {type: number}
+        shippingCost: {type: number}
+        createdAt: {type: string}
+        updatedAt: {type: string}
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, productId, quantity, price, total]
+            properties:
+              id: {type: number}
+              productId: {type: number}
+              quantity: {type: number}
+              price: {type: number}
+              total: {type: number}
+              product:
+                type: object
+                required: [id, name, price]
+                properties:
+                  id: {type: number}
+                  name: {type: string}
+                  price: {type: number}
+    HistoryOrder:
+      type: object
+      required: [id, status, createdAt, updatedAt, items]
+      properties:
+        id: {type: number}
+        status:
+          type: string
+          description: History recognizes cart, pending, pending_payment, preparing, delivery, completed, cancelled, awaiting_payment and waiting_for_payment.
+        createdAt: {type: string}
+        updatedAt: {type: string}
+        total: {type: number}
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, quantity, product]
+            properties:
+              id: {type: number}
+              quantity: {type: number}
+              product:
+                type: object
+                required: [id, name, price, category]
+                properties:
+                  id: {type: number}
+                  name: {type: string}
+                  price: {type: number}
+                  discountedPrice: {type: number}
+                  image: {type: string}
+                  category: {type: string}
