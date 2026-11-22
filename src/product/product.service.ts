@@ -43,7 +43,7 @@ export class ProductService {
         this.categoryRepository = AppDataSource.getRepository(Category);
     }
 
-    async filterProducts(filters: ProductFilters, userId: string): Promise<ProductFilterResult> {
+    async filterProducts(filters: ProductFilters, userId?: string): Promise<ProductFilterResult> {
         try {
             const queryBuilder = this.productRepository.createQueryBuilder("product");
 
@@ -61,7 +61,7 @@ export class ProductService {
 
             const products = await queryBuilder.getMany();
 
-            const user = await AppDataSource.getRepository(User).findOneBy({id: userId});
+            const user = userId ? await AppDataSource.getRepository(User).findOneBy({id: userId}) : null;
 
             const productsWithDiscount = await Promise.all(
                 products.map(async (product) => {
