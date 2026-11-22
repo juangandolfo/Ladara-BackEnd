@@ -9,22 +9,11 @@ import {BusinessSettingService} from "../business-settings/business-setting.serv
 import {OrderFulfillmentUpdateDto} from "../dtos/order.dto";
 import {BillingInformation} from "../billing-information/billing-information.entity";
 import {sanitizePrice, sanitizeString} from "../common/normalize";
+import {CartItemInput} from "./types/cart-item.type";
+import {CartValidationService} from "./cart-validation.service";
+import {PromoService} from "./promo.service";
 
-export type CartItemInput = {
-    id?: number | string;
-    cart_item_id?: number | string;
-    product_id?: number | string;
-    productId?: number | string;
-    variant_id?: number | string;
-    variantId?: number | string;
-    seller_id?: number | string;
-    sellerId?: number | string;
-    quantity?: number | string;
-    unit_price?: number | string;
-    price?: number | string;
-    subtotal?: number | string;
-    [key: string]: any;
-};
+export type {CartItemInput};
 
 export class OrderService {
     private readonly orderRepo: Repository<Order>;
@@ -63,47 +52,7 @@ export class OrderService {
     }
 
     static validateCartItemPayload(item: CartItemInput): CartItemInput {
-        if (!item || typeof item !== "object") {
-            throw new Error("Cart item payload is required");
-        }
-
-        const productId = item.product_id ?? item.productId;
-        const sellerId = item.seller_id ?? item.sellerId;
-        const quantity = Number(sanitizeString(item.quantity));
-        const unitPrice = Number(sanitizeString(item.unit_price ?? item.price ?? 0));
-
-        if (productId === undefined || productId === null || sanitizeString(productId) === "") {
-            throw new Error("product_id is required");
-        }
-        if (sellerId === undefined || sellerId === null || sanitizeString(sellerId) === "") {
-            throw new Error("seller_id is required");
-        }
-        if (!Number.isFinite(quantity) || !Number.isInteger(quantity) || quantity < 1) {
-            throw new Error("quantity must be at least 1; quantity must be a whole number");
-        }
-        if (!Number.isFinite(unitPrice) || unitPrice < 0) {
-            throw new Error("unit_price must be a valid non-negative number");
-        }
-
-        const normalizedPrice = sanitizePrice(unitPrice);
-        const normalized: CartItemInput = {
-            ...item,
-            product_id: Number(sanitizeString(productId)),
-            productId: Number(sanitizeString(productId)),
-            seller_id: sanitizeString(sellerId),
-            sellerId: sanitizeString(sellerId),
-            quantity: Number(quantity),
-            unit_price: normalizedPrice,
-            price: normalizedPrice,
-            subtotal: sanitizePrice(Number(quantity) * normalizedPrice),
-        };
-
-        if (item.variant_id !== undefined || item.variantId !== undefined) {
-            normalized.variant_id = item.variant_id ?? item.variantId;
-            normalized.variantId = item.variant_id ?? item.variantId;
-        }
-
-        return normalized;
+        return CartValidationService.validate(item);
     }
 
     static mergeCartItems(guestCartItems: CartItemInput[] = [], authenticatedCartItems: CartItemInput[] = []): CartItemInput[] {
@@ -214,51 +163,7 @@ export class OrderService {
             active?: boolean;
         } = {},
     ): { discountAmount: number; description: string } {
-        const normalizedCode = sanitizeString(promoCode);
-        const definition = { ...promo, code: promo.code ?? normalizedCode };
-        const resolvedCode = sanitizeString(definition.code, {uppercase: true});
-
-        if (!normalizedCode || !resolvedCode || normalizedCode.toUpperCase() !== resolvedCode) {
-            throw new Error("The promotional code you entered is invalid or expired");
-        }
-
-        if (definition.active === false) {
-            throw new Error("The promotional code you entered is invalid or expired");
-        }
-
-        const expiry = definition.expiresAt ? new Date(definition.expiresAt) : null;
-        if (expiry && Number.isNaN(expiry.getTime())) {
-            throw new Error("The promotional code you entered is invalid or expired");
-        }
-        if (expiry && expiry.getTime() < Date.now()) {
-            throw new Error("The promotional code you entered is invalid or expired");
-        }
-
-        const minimumSpend = Number(definition.minimumSpend ?? 0);
-        if (Number(subtotal) < minimumSpend) {
-            throw new Error("The promotional code you entered is invalid or expired");
-        }
-
-        const discountType = sanitizeString(definition.discountType ?? "percent").toLowerCase();
-        const discountValue = Number(definition.value ?? 0);
-
-        if (!Number.isFinite(discountValue) || discountValue <= 0) {
-            throw new Error("The promotional code you entered is invalid or expired");
-        }
-
-        let discountAmount = 0;
-        if (discountType === "percent") {
-            discountAmount = sanitizePrice((Number(subtotal) * discountValue) / 100);
-        } else if (discountType === "fixed") {
-            discountAmount = sanitizePrice(Math.min(Number(subtotal), discountValue));
-        } else {
-            throw new Error("The promotional code you entered is invalid or expired");
-        }
-
-        return {
-            discountAmount,
-            description: `${resolvedCode} - ${discountType === "percent" ? `${discountValue}% off` : `$${discountValue.toFixed(2)} off`}`,
-        };
+        return PromoService.apply(promoCode, subtotal, promo);
     }
 
     static validateCheckout(
